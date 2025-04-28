@@ -26,6 +26,8 @@ public class ConfigLoader
     {
 
         var fileStore = new ConfigStoreOptions()
+                .setType("file")
+                .setFormat("json")
                 .setConfig(new JsonObject().put("path", Constants.CONFIG_FILE_PATH));
 
         var options = new ConfigRetrieverOptions().addStore(fileStore);

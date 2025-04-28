@@ -8,12 +8,16 @@ import io.vertx.sqlclient.SqlClient;
 import org.example.constants.Constants;
 import org.example.utils.ApiResponse;
 import org.example.db.DbQueryHelper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 
 import java.util.Map;
 
 public class DiscoveryRoutes extends BaseApi
 {
+    private static final Logger logger = LoggerFactory.getLogger(DiscoveryRoutes.class);
+
     protected final DbQueryHelper dbHelper;
 
     private static final Map<String, Boolean> discoverySchema = Map.of(
@@ -29,6 +33,8 @@ public class DiscoveryRoutes extends BaseApi
         super(client, Constants.DISCOVERY_TABLE, Constants.DISCOVERY_MODULE, discoverySchema);
 
         this.dbHelper = new DbQueryHelper(client);
+
+        logger.info("Initialized DiscoveryRoutes API with table {}", Constants.DISCOVERY_TABLE);
     }
 
     private Future<Object> validateCredentialIDs(JsonArray credentialIDs)
@@ -94,15 +100,18 @@ public class DiscoveryRoutes extends BaseApi
 
     public Router init(Router router)
     {
-        router.post("/discovery").handler(this::create);
+        router.post("/").handler(this::create);
 
-        router.put("/discovery/:id").handler(this::update);
+        logger.info("inisde the init method of discovery routes");
 
-        router.delete("/discovery/:id").handler(this::delete);
+        router.get("/").handler(this::findAll);
 
-        router.get("/discovery/:id").handler(this::findOne);
+        router.put("/:id").handler(this::update);
 
-        router.get("/discovery").handler(this::findAll);
+        router.delete("/:id").handler(this::delete);
+
+        router.get("/:id").handler(this::findOne);
+
 
         return router;
     }

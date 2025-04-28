@@ -1,6 +1,7 @@
 package org.example.routes;
 
 import io.vertx.core.Future;
+import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
 import io.vertx.sqlclient.SqlClient;
@@ -50,6 +51,31 @@ public class UserRoutes extends BaseApi
         }
     }
 
+    private void register (RoutingContext ctx)
+    {
+        var body = ctx.body().asJsonObject();
+
+        if(!validate(ctx))
+        {
+            return;
+        }
+
+        var username = body.getString("username");
+
+        var password = body.getString("password");
+
+        var data = new JsonObject()
+                .put("username", username)
+                .put("password", hashPassword(password));
+
+
+        dbHelper.insert("users", data)
+                .onSuccess(v -> ApiResponse.success(ctx, null, "User registered successfully", 201))
+                .onFailure(err ->
+                {
+                    ApiResponse.error(ctx, err.getMessage(), 400);
+                });
+    }
     protected void login(RoutingContext ctx)
     {
         var body = ctx.body().asJsonObject();
@@ -100,7 +126,7 @@ public class UserRoutes extends BaseApi
 
     public Router init(Router router)
     {
-        router.post("/register").handler(this::create);
+        router.post("/register").handler(this::register);
 
         router.post("/login").handler(this::login);
 

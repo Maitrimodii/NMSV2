@@ -30,6 +30,7 @@ public abstract class BaseApi
         this.moduleName = moduleName;
         this.dbHelper = new DbQueryHelper(client);
         this.schema = Schema;
+        logger.info("Initialized {} API with table {}", moduleName, tableName);
     }
 
     /**
@@ -137,6 +138,7 @@ public abstract class BaseApi
 
     protected void findAll(RoutingContext ctx)
     {
+        logger.info("Fetching all {} records", moduleName, tableName);
         dbHelper.fetchAll(tableName)
                 .onSuccess(rows -> ApiResponse.success(ctx, rows, moduleName + " list fetched", 200))
                 .onFailure(err -> {

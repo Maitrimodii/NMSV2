@@ -39,10 +39,7 @@ public class HttpServer extends AbstractVerticle
                 .requestHandler(router)
                 .listen(port)
                 .onSuccess(server -> startPromise.complete())
-                .onFailure(err ->
-                {
-                    startPromise.fail(err);
-                });
+                .onFailure(startPromise::fail);
 
     }
 
@@ -58,14 +55,21 @@ public class HttpServer extends AbstractVerticle
 
         var jwtHandler = JWTAuthHandler.create(jwt.getAuthProvider());
 
+        Router credentialRouter = Router.router(vertx);
+
+        new CredentialRoutes(sqlClient).init(credentialRouter);
+
         router.route("/api/credentials/*")
                 .handler(jwtHandler)
-                .subRouter(new CredentialRoutes(sqlClient).init(router));
+                .subRouter(credentialRouter);
+
+        Router discoveryRouter = Router.router(vertx);
+
+        new DiscoveryRoutes(sqlClient).init(discoveryRouter);
 
         router.route("/api/discoveries/*")
                 .handler(jwtHandler)
-                .subRouter(new DiscoveryRoutes(sqlClient).init(router));
-
+                .subRouter(discoveryRouter);
         // Global error handler
 
         router.route().failureHandler(ctx -> {

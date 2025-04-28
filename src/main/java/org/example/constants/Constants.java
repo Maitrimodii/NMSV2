@@ -18,7 +18,7 @@ public final class Constants {
     public static final String DEFAULT_DB_USER = "postgres";
     public static final String DEFAULT_DB_PASSWORD = "password";
     public static final int DEFAULT_DB_POOL_SIZE = 5;
-    public static final String CONFIG_FILE_PATH = "config.json";
+    public static final String CONFIG_FILE_PATH = "Config.json";
 
     //Jwt config
     public static final long DEFAULT_EXPIRATION_MILLIS = 3600000L; // 1 hour
@@ -31,11 +31,11 @@ public final class Constants {
     public static final String HTTP_PORT = "http.port";
 
 
-    public static final String CREDENTIAL_TABLE = "credential";
+    public static final String CREDENTIAL_TABLE = "credentials";
 
     public static final String CREDENTIAL_MODULE = "credential";
 
-    public static final String DISCOVERY_TABLE = "discovery";
+    public static final String DISCOVERY_TABLE = "discoveries";
     public static final String DISCOVERY_MODULE = "discovery";
 
     public static final String USER_TABLE = "users";

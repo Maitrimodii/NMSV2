@@ -5,9 +5,14 @@ import io.vertx.sqlclient.SqlClient;
 import org.example.constants.Constants;
 
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 
 public class CredentialRoutes extends BaseApi
 {
+
+    private static final Logger logger = LoggerFactory.getLogger(CredentialRoutes.class);
 
     /**
      * Constructor to initialize CredentialRoutes with database client.
@@ -17,6 +22,9 @@ public class CredentialRoutes extends BaseApi
     public CredentialRoutes(SqlClient client)
     {
         super(client, Constants.CREDENTIAL_TABLE, Constants.CREDENTIAL_MODULE, CredentialSchema);
+        logger.info("Initialized Credential API with table {}", Constants.CREDENTIAL_TABLE);
+
+
     }
 
     private static final Map<String, Boolean> CredentialSchema = Map.of(
@@ -33,15 +41,16 @@ public class CredentialRoutes extends BaseApi
      */
     public Router init(Router router)
     {
-        router.post("/" + "credentials" ).handler(this::create);
+        router.post("/" ).handler(this::create);
 
-        router.put("/" + "credentials" + "/:id").handler(this::update);
+        logger.info("inisde the init method of credential routes");
+        router.get("/").handler(this::findAll);
 
-        router.delete("/" + "credentials" + "/:id").handler(this::delete);
+        router.put( "/:id").handler(this::update);
 
-        router.get("/" + "credentials" + "/:id").handler(this::findOne);
+        router.delete("/:id").handler(this::delete);
 
-        router.get("/" + "credentials").handler(this::findAll);
+        router.get("/:id").handler(this::findOne);
 
         return router;
     }
