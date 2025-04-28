@@ -54,7 +54,7 @@ public class HttpServer extends AbstractVerticle
         router.route().handler(BodyHandler.create());
 
         router.route("/api/users/*")
-                .subRouter(new CredentialRoutes(sqlClient).init(router));
+                .subRouter(new UserRoutes(sqlClient,jwt).init(router));
 
         var jwtHandler = JWTAuthHandler.create(jwt.getAuthProvider());
 
