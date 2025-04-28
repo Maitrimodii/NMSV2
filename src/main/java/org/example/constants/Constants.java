@@ -35,4 +35,11 @@ public final class Constants {
 
     public static final String CREDENTIAL_MODULE = "credential";
 
+    public static final String DISCOVERY_TABLE = "discovery";
+    public static final String DISCOVERY_MODULE = "discovery";
+
+    public static final String USER_TABLE = "users";
+    public static final String USER_MODULE = "user";
+
+
 }

@@ -51,43 +51,6 @@ public class Jwt
     }
 
     /**
-     * Generate a JWT token with custom claims.
-     *
-     * @param claims the custom claims to include in the token
-     * @return the generated JWT token as a string
-     */
-    public String generateTokenWithClaims(JsonObject claims)
-    {
-        logger.info("Generating JWT with custom claims");
-
-        return jwtAuth.generateToken(claims, jwtOptions);
-    }
-
-    /**
-     * Verifies the validity of a JWT token.
-     *
-     * @param token the JWT token to verify
-     * @return true if the token is valid, false otherwise
-     */
-    public boolean verifyToken(String token)
-    {
-        try
-        {
-            jwtAuth.authenticate(new JsonObject().put("jwt", token));
-
-            logger.info("Token is valid");
-
-            return true;
-        }
-        catch (Exception e)
-        {
-            logger.error("Invalid token: {}. Error: {}", token, e.getMessage());
-
-            return false;
-        }
-    }
-
-    /**
      * Returns the JWTAuth instance used for JWT-related operations.
      *
      * @return the JWTAuth instance
