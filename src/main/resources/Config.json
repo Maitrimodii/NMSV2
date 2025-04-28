@@ -1,0 +1,18 @@
+{
+  "db": {
+    "host": "localhost",
+    "port": 5432,
+    "database": "nms",
+    "user": "maitri",
+    "password": "Maitri@12",
+    "poolSize": 5
+  },
+
+  "jwt": {
+    "secret": "maitri@12",
+    "expirationMillis": 60,
+    "algorithm": "HS256"
+  },
+
+  "http.port": 8080
+}
