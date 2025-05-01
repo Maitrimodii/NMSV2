@@ -20,7 +20,8 @@ public class ProcessBuilderUtil
     private static final int PING_TIMEOUT_MS       = 2000; // 2 seconds
     private static final int SOCKET_TIMEOUT_MS     = 2000; // 2 seconds
     private static final int PROCESS_TIMEOUT_SEC   = 30;   // 30 seconds
-    private static final String GO_BINARY_PATH     = "/home/maitri/IdeaProjects/NMSv2/go/nms-plugin";
+
+    private static final String GO_BINARY_PATH     = "/go/nms-plugin";
 
     /**
      * Non-blocking version that checks device availability.
@@ -169,13 +170,14 @@ public class ProcessBuilderUtil
             }
 
             var exitCode = process.exitValue();
-            if (exitCode != 0) {
-                LOGGER.error("Go plugin process failed with exit code: {}, stderr: {}", exitCode);
+
+            if (exitCode != 0)
+            {
+                LOGGER.error("Go plugin process failed with exit code: {}", exitCode);
                 return null;
             }
 
             var outputStr = output.toString().trim();
-
 
             try
             {
@@ -205,7 +207,6 @@ public class ProcessBuilderUtil
                     LOGGER.warn("Go plugin operation succeed: {}", firstResult.encode());
                 }
 
-//                LOGGER.info(String.valueOf(firstResult));
                 return status;
             }
             catch (Exception e)
@@ -213,12 +214,15 @@ public class ProcessBuilderUtil
                 try
                 {
                     var result = new JsonObject(outputStr);
+
                     LOGGER.info("Go plugin output object: {}", result.encode());
+
                     return "fail";
                 }
                 catch (Exception e2)
                 {
                     LOGGER.error("Failed to parse JSON output: {}, raw output: {}", e.getMessage(), outputStr);
+
                     return null;
                 }
             }

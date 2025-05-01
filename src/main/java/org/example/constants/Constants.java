@@ -23,6 +23,8 @@ public final class Constants {
     //Jwt config
     public static final long DEFAULT_EXPIRATION_MILLIS = 3600000L; // 1 hour
 
+    public static final long DEFAULT_REFRESH_EXPIRATION_MILLIS = 604800000L; // 7 days
+
     //jwt Key store related constants
     public static final String KEYSTORE_PATH = "keystore.jceks";
     public static final String KEYSTORE_PASSWORD = "secret";
@@ -37,20 +39,34 @@ public final class Constants {
     public static final String CREDENTIAL_MODULE = "credential";
 
     public static final String DISCOVERY_TABLE = "discoveries";
+
     public static final String DISCOVERY_MODULE = "discovery";
 
+    public static final String PROVISION_TABLE = "provision";
+
+    public static final String PROVISION_MODULE = "provision";
+
     public static final String USER_TABLE = "users";
+
     public static final String USER_MODULE = "user";
 
     // Field names
     public static final String FIELD_ID = "id";
+
     public static final String REQUEST_TYPE = "requestType";
+
     public static final String DISCOVERY = "Discovery";
+
     public static final String DISCOVERY_ID = "discovery_id";
+
     public static final String IP = "ip";
+
     public static final String PORT = "port";
+
     public static final String CREDENTIAL_IDS = "credential_ids";
+
     public static final String CREDENTIAL_PROFILES = "credential_profiles";
+
     public static final String CREDENTIAL_ID = "credential_id";
 
     // Event bus address
@@ -58,9 +74,10 @@ public final class Constants {
 
     // Status and error codes
     public static final String STATUS = "status";
+
     public static final String SUCCESS = "Success";
-    public static final String FAIL = "fail";
-    public static final String DOWN = "down";
-    public static final String UP = "up";
+
+    public static final String FAIL = "Fail";
+
 
 }

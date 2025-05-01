@@ -10,6 +10,9 @@ import org.example.constants.Constants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.UUID;
+
+
 public class Jwt
 {
 
@@ -17,11 +20,10 @@ public class Jwt
 
     private final JWTAuth jwtAuth;
     private final JWTOptions jwtOptions;
+    private final JWTOptions refreshTokenOptions;
 
     public Jwt()
     {
-        var expirationMillis = Constants.DEFAULT_EXPIRATION_MILLIS;
-
         KeyStoreOptions keyStoreOptions = new KeyStoreOptions()
                 .setPath(Constants.KEYSTORE_PATH)
                 .setPassword(Constants.KEYSTORE_PASSWORD)
@@ -32,7 +34,11 @@ public class Jwt
 
         this.jwtAuth = JWTAuth.create(Vertx.currentContext().owner(), jwtAuthOptions);
 
-        this.jwtOptions = new JWTOptions().setExpiresInSeconds(Math.toIntExact(expirationMillis / 1000));
+        this.jwtOptions = new JWTOptions().setExpiresInSeconds(Math.toIntExact(Constants.DEFAULT_EXPIRATION_MILLIS / 1000));
+
+        this.refreshTokenOptions = new JWTOptions()
+                .setExpiresInSeconds(Math.toIntExact(Constants.DEFAULT_REFRESH_EXPIRATION_MILLIS / 1000));
+
     }
 
     /**
@@ -48,6 +54,24 @@ public class Jwt
         var claims = new JsonObject().put("sub", username);
 
         return jwtAuth.generateToken(claims, jwtOptions);
+    }
+
+    /**
+     * Generates a refresh token for the given username.
+     *
+     * @param username the username for which to generate the token
+     * @return the generated refresh token as a string
+     */
+    public String generateRefreshToken(String username)
+    {
+        logger.info("Generating refresh token for username: [REDACTED]");
+
+        var claims = new JsonObject()
+                .put("sub", username)
+                .put("type", "refresh")
+                .put("jti", UUID.randomUUID().toString()); // Unique token ID
+
+        return jwtAuth.generateToken(claims, refreshTokenOptions);
     }
 
     /**

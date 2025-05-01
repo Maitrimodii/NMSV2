@@ -78,6 +78,7 @@ public class UserRoutes extends BaseApi
                     ApiResponse.error(ctx, err.getMessage(), 400);
                 });
     }
+
     protected void login(RoutingContext ctx)
     {
         var body = ctx.body().asJsonObject();
@@ -86,6 +87,7 @@ public class UserRoutes extends BaseApi
         {
             return;
         }
+
         var username = body.getString("username");
 
         var password = body.getString("password");
@@ -107,8 +109,11 @@ public class UserRoutes extends BaseApi
                         user.remove("password");
 
                         var token = jwt.generateToken(username);
+                        var refreshToken = jwt.generateRefreshToken(username);
 
                         user.put("token", token);
+
+                        user.put("refreshToken", refreshToken);
 
                         return Future.succeededFuture(user);
                     }
@@ -126,11 +131,63 @@ public class UserRoutes extends BaseApi
                 });
     }
 
+    private void refresh(RoutingContext ctx)
+    {
+        var token = ctx.request().getHeader("Authorization");
+
+        if (token == null || !token.startsWith("Bearer "))
+        {
+            ApiResponse.error(ctx, "Missing or invalid token", 401);
+            return;
+        }
+
+        var refreshToken = token.substring(7);
+
+        // Verify the refresh token
+        jwt.getAuthProvider().authenticate(new JsonObject().put("token", refreshToken))
+                .compose(user -> {
+                    // Check if this is a refresh token
+                    var tokenInfo = user.principal();
+
+                    if (!"refresh".equals(tokenInfo.getString("type")))
+                    {
+                        return Future.failedFuture("Invalid token type");
+                    }
+
+                    // Extract username from token
+                    var username = tokenInfo.getString("sub");
+
+                    if (username == null)
+                    {
+                        return Future.failedFuture("Invalid token");
+                    }
+
+                    // Generate new tokens
+                    var newAccessToken = jwt.generateToken(username);
+
+                    var newRefreshToken = jwt.generateRefreshToken(username);
+
+                    // Return the new tokens
+                    JsonObject response = new JsonObject()
+                            .put("token", newAccessToken)
+                            .put("refreshToken", newRefreshToken)
+                            .put("username", username);
+
+                    return Future.succeededFuture(response);
+                })
+
+                .onSuccess(tokens -> ApiResponse.success(ctx, tokens, "Token refreshed successfully", 200))
+
+                .onFailure(err -> ApiResponse.error(ctx, err.getMessage(), 401));
+    }
+
     public Router init(Router router)
     {
         router.post("/register").handler(this::register);
 
         router.post("/login").handler(this::login);
+
+        router.post("/referesh").handler(this::refresh);
 
         return router;
     }
