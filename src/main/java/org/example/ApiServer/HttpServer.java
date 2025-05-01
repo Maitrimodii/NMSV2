@@ -57,24 +57,25 @@ public class HttpServer extends AbstractVerticle
 
         Router credentialRouter = Router.router(vertx);
 
-        new CredentialRoutes(sqlClient).init(credentialRouter);
 
         router.route("/api/credentials/*")
                 .handler(jwtHandler)
-                .subRouter(credentialRouter);
+                .subRouter(new CredentialRoutes(sqlClient).init(credentialRouter));
 
         Router discoveryRouter = Router.router(vertx);
 
-        new DiscoveryRoutes(sqlClient).init(discoveryRouter);
-
         router.route("/api/discoveries/*")
                 .handler(jwtHandler)
-                .subRouter(discoveryRouter);
+                .subRouter(new DiscoveryRoutes(sqlClient).init(discoveryRouter));
+
         // Global error handler
 
         router.route().failureHandler(ctx -> {
+
             var statusCode = ctx.statusCode() > 0 ? ctx.statusCode() : 500;
+
             var message = ctx.failure() != null ? ctx.failure().getMessage() : "Internal Server Error";
+
             ApiResponse.error(ctx, message, statusCode);
         });
 

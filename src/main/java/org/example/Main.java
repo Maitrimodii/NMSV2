@@ -5,6 +5,8 @@ import io.vertx.core.Vertx;
 import org.example.ApiServer.HttpServer;
 import org.example.constants.Constants;
 import org.example.db.DBConfig;
+import org.example.db.DbQueryHelper;
+import org.example.engine.DiscoveryEngine;
 import org.example.utils.ConfigLoader;
 import org.example.utils.Jwt;
 import org.slf4j.Logger;
@@ -14,7 +16,6 @@ public class Main
 {
 
     private static final Logger logger = LoggerFactory.getLogger(Main.class);
-
 
     public static void main(String[] args)
     {
@@ -42,18 +43,37 @@ public class Main
 
                     var pgPool = DBConfig.createPgPool(vertx, config);
 
+                    var dbHelper = new DbQueryHelper(pgPool);
+
                     var server = new HttpServer(pgPool, new Jwt(), config.getInteger(Constants.HTTP_PORT));
+
+                    var discoveryEngine = new DiscoveryEngine(dbHelper);
 
                     // Deploy the HttpServer verticle
                     return vertx.deployVerticle(server)
-                            .mapEmpty()
-                            .onComplete(result ->
-                            {
-                                if (result.succeeded()) {
-                                    Runtime.getRuntime().addShutdownHook(new Thread(() ->
-                                    {
-                                        logger.info("Shutting down server and closing resources");
+                            .compose(httpServerId -> {
+
+                                logger.info("HttpServer verticle deployed successfully with ID: {}", httpServerId);
+                                // Deploy DiscoveryEngine verticle
+
+                                return vertx.deployVerticle(discoveryEngine)
+                                        .compose(discoveryEngineId ->
+                                        {
+                                            logger.info("DiscoveryEngine verticle deployed successfully with ID: {}", discoveryEngineId);
+
+                                            return Future.succeededFuture();
+                                        });
+                            })
+
+                            .onComplete(result -> {
+                                if (result.succeeded())
+                                {
+                                    // Add shutdown hook on successful deployment
+                                    Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                                        logger.info("Shutting down application and closing resources");
+
                                         pgPool.close();
+
                                         vertx.close();
                                     }));
                                 }

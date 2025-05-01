@@ -146,6 +146,7 @@ public class DbQueryHelper
                 .map(rows ->
                 {
                     var row = rows.iterator().next();
+                    logger.info(String.valueOf(row));
                     return row.toJson();
                 });
     }

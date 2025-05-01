@@ -28,6 +28,7 @@ public final class Constants {
     public static final String KEYSTORE_PASSWORD = "secret";
 
     // HTTP Config Keys
+
     public static final String HTTP_PORT = "http.port";
 
 
@@ -41,5 +42,25 @@ public final class Constants {
     public static final String USER_TABLE = "users";
     public static final String USER_MODULE = "user";
 
+    // Field names
+    public static final String FIELD_ID = "id";
+    public static final String REQUEST_TYPE = "requestType";
+    public static final String DISCOVERY = "Discovery";
+    public static final String DISCOVERY_ID = "discovery_id";
+    public static final String IP = "ip";
+    public static final String PORT = "port";
+    public static final String CREDENTIAL_IDS = "credential_ids";
+    public static final String CREDENTIAL_PROFILES = "credential_profiles";
+    public static final String CREDENTIAL_ID = "credential_id";
+
+    // Event bus address
+    public static final String DISCOVERY_ADDRESS = "discovery.engine";
+
+    // Status and error codes
+    public static final String STATUS = "status";
+    public static final String SUCCESS = "Success";
+    public static final String FAIL = "fail";
+    public static final String DOWN = "down";
+    public static final String UP = "up";
 
 }

@@ -27,9 +27,13 @@ public abstract class BaseApi
     protected BaseApi(SqlClient client, String tableName, String moduleName, Map<String, Boolean> Schema)
     {
         this.tableName = tableName;
+
         this.moduleName = moduleName;
+
         this.dbHelper = new DbQueryHelper(client);
+
         this.schema = Schema;
+
         logger.info("Initialized {} API with table {}", moduleName, tableName);
     }
 
@@ -47,36 +51,55 @@ public abstract class BaseApi
         if(body == null)
         {
             ApiResponse.error(ctx, "Request body cannot be null", 400);
-            return false;
+            return true;
         }
 
         // Iterate through the schema to check for required fields
-        for (Map.Entry<String, Boolean> entry : schema.entrySet()) {
+        for (var entry : schema.entrySet())
+        {
             String fieldName = entry.getKey();
             Boolean isRequired = entry.getValue();
 
             // If the field is required and not present in the request body, return false
-            if (isRequired && !body.containsKey(fieldName)) {
+            if (isRequired && !body.containsKey(fieldName))
+            {
                 ApiResponse.error(ctx, "Missing required field: " + fieldName, 400);
-                return false;
+                return true;
             }
 
             // Additional check for empty or null values in required fields
-            if (isRequired && body.getValue(fieldName) == null) {
+            if (isRequired && body.getValue(fieldName) == null)
+            {
                 ApiResponse.error(ctx, "Field " + fieldName + " cannot be null", 400);
-                return false;
+                return true;
             }
         }
 
-        return true;
+        return false;
     }
 
+    protected Long parseId(RoutingContext ctx)
+    {
+        var idParam = ctx.pathParam(FIELD_ID);
+
+        try
+        {
+            return Long.parseLong(idParam);
+        }
+        catch (NumberFormatException e)
+        {
+            logger.error("Invalid ID format: {}", idParam);
+            ApiResponse.error(ctx, "Invalid ID format for '" + FIELD_ID + "'", 400);
+            return null;
+        }
+    }
 
     protected void create(RoutingContext ctx)
     {
         var body = ctx.body().asJsonObject();
 
-        if (!validate(ctx)) {
+        if (validate(ctx))
+        {
             return;
         }
 
@@ -90,13 +113,14 @@ public abstract class BaseApi
 
     protected void update(RoutingContext ctx)
     {
-        var id = ctx.pathParam(FIELD_ID);
+        var id = parseId(ctx);
 
-        var body = ctx.body().asJsonObject();
-
-        if (!validate(ctx)) {
+        if(id == null)
+        {
             return;
         }
+
+        var body = ctx.body().asJsonObject();
 
         dbHelper.update(tableName, FIELD_ID, id, body)
                 .onSuccess(res -> ApiResponse.success(ctx, null, moduleName + " updated successfully", 200))
@@ -108,7 +132,7 @@ public abstract class BaseApi
 
     protected void delete(RoutingContext ctx)
     {
-        var id = ctx.pathParam(FIELD_ID);
+        var id = parseId(ctx);
 
         dbHelper.delete(tableName, FIELD_ID, id)
                 .onSuccess(res -> ApiResponse.success(ctx, null, moduleName + " deleted successfully", 200))
@@ -120,13 +144,16 @@ public abstract class BaseApi
 
     protected void findOne(RoutingContext ctx)
     {
-        var id = ctx.pathParam(FIELD_ID);
+        var id = parseId(ctx);
 
         dbHelper.fetchOne(tableName, FIELD_ID, id)
                 .onSuccess(row -> {
-                    if (row != null) {
+                    if (row != null)
+                    {
                         ApiResponse.success(ctx, row, moduleName + " found", 200);
-                    } else {
+                    }
+                    else
+                    {
                         ApiResponse.error(ctx, moduleName + " not found", 404);
                     }
                 })

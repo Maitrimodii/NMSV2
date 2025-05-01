@@ -2,6 +2,7 @@ package org.example.routes;
 
 import io.vertx.core.Future;
 import io.vertx.core.json.JsonArray;
+import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
 import io.vertx.sqlclient.SqlClient;
@@ -37,63 +38,56 @@ public class DiscoveryRoutes extends BaseApi
         logger.info("Initialized DiscoveryRoutes API with table {}", Constants.DISCOVERY_TABLE);
     }
 
-    private Future<Object> validateCredentialIDs(JsonArray credentialIDs)
+
+    public void runDiscovery(RoutingContext ctx)
     {
+        var discoveryId = ctx.pathParam(FIELD_ID);
 
-        if (credentialIDs == null || credentialIDs.isEmpty())
-        {
-            return Future.failedFuture("credential_ids must be present and not empty");
-        }
+        var id = Integer.parseInt(discoveryId);
 
-        var future = Future.succeededFuture();
+        // Fetch discovery profile
+        dbHelper.fetchOne(Constants.DISCOVERY_TABLE, FIELD_ID, id)
+                .compose(discovery -> {
+                    logger.info(String.valueOf(discovery));
 
-        for (int i = 0; i < credentialIDs.size(); i++) {
+                    // Prepare payload for DiscoveryEngine
+                    var payload = new JsonObject()
+                            .put(Constants.REQUEST_TYPE, Constants.DISCOVERY)
+                            .put(Constants.DISCOVERY_ID, id)
+                            .put(Constants.IP, discovery.getString(Constants.IP))
+                            .put(Constants.PORT, discovery.getInteger(Constants.PORT, 22))
+                            .put(Constants.CREDENTIAL_IDS, discovery.getString(Constants.CREDENTIAL_IDS, "[]"));
 
-            var  id = credentialIDs.getInteger(i);
+                    logger.info(String.valueOf(payload));
 
-            future = future.compose(v ->
-                    dbHelper.fetchOne(Constants.CREDENTIAL_TABLE, FIELD_ID, id)
+                    var credentialIdsStr = discovery.getString(Constants.CREDENTIAL_IDS, "[]");
 
-                            .compose(result ->
-                            {
-                                if (result == null)
-                                {
-                                    return Future.failedFuture("Credential ID " + id + " does not exist.");
-                                }
-                                return Future.succeededFuture();
-                            })
-            );
-        }
-        return future;
-    }
+                    try
+                    {
+                        var credentialIdsArray = new JsonArray(credentialIdsStr);
 
-    public void create(RoutingContext ctx)
-    {
+                        logger.info(String.valueOf(credentialIdsArray));
 
-        var body = ctx.body().asJsonObject();
+                        payload.put(Constants.CREDENTIAL_IDS, credentialIdsArray);
+                    }
+                    catch (Exception e)
+                    {
+                        logger.error("Failed to parse credential_ids for discovery id={}: {}", discoveryId, e.getMessage());
 
-        if(!validate(ctx))
-        {
-            return;
-        }
+                        return Future.failedFuture("Invalid credential_ids format");
+                    }
 
-        var credentialIDs = body.getJsonArray("credential_ids", new JsonArray());
+                    // Send to event bus
 
-        validateCredentialIDs(credentialIDs)
-
-                .onSuccess(v -> {
-
-                    dbHelper.insert(Constants.DISCOVERY_TABLE, body)
-
-                            .onSuccess(results ->
-                                    ApiResponse.success(ctx, null, "Discovery created successfully", 201))
-
-                            .onFailure(err ->
-                            {
-                                ApiResponse.error(ctx, err.getMessage(), 400);
-                            });
+                    return ctx.vertx().eventBus().request(Constants.DISCOVERY_ADDRESS, payload)
+                            .map(message -> (JsonObject) message.body());
                 })
+
+                .onSuccess(result -> ApiResponse.success(ctx, result, result.getString("error_message"), 200))
+
                 .onFailure(err -> {
+                    logger.error("Run discovery failed for id={}: {}", discoveryId, err.getMessage());
+
                     ApiResponse.error(ctx, err.getMessage(), 400);
                 });
     }
@@ -102,7 +96,7 @@ public class DiscoveryRoutes extends BaseApi
     {
         router.post("/").handler(this::create);
 
-        logger.info("inisde the init method of discovery routes");
+        logger.info("inside the init method of discovery routes");
 
         router.get("/").handler(this::findAll);
 
@@ -112,6 +106,7 @@ public class DiscoveryRoutes extends BaseApi
 
         router.get("/:id").handler(this::findOne);
 
+        router.post("/:id").handler(this::runDiscovery);
 
         return router;
     }

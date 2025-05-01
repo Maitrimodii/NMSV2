@@ -47,7 +47,9 @@ public class UserRoutes extends BaseApi
         }
         catch (NoSuchAlgorithmException e)
         {
-            throw new RuntimeException("Password hashing failed", e);
+            System.err.println("SHA-256 not available: " + e.getMessage());
+
+            return null;
         }
     }
 
@@ -55,7 +57,7 @@ public class UserRoutes extends BaseApi
     {
         var body = ctx.body().asJsonObject();
 
-        if(!validate(ctx))
+        if(validate(ctx))
         {
             return;
         }
@@ -80,7 +82,7 @@ public class UserRoutes extends BaseApi
     {
         var body = ctx.body().asJsonObject();
 
-        if(!validate(ctx))
+        if(validate(ctx))
         {
             return;
         }

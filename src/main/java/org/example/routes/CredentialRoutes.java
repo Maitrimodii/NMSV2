@@ -22,6 +22,7 @@ public class CredentialRoutes extends BaseApi
     public CredentialRoutes(SqlClient client)
     {
         super(client, Constants.CREDENTIAL_TABLE, Constants.CREDENTIAL_MODULE, CredentialSchema);
+
         logger.info("Initialized Credential API with table {}", Constants.CREDENTIAL_TABLE);
 
 
@@ -43,7 +44,6 @@ public class CredentialRoutes extends BaseApi
     {
         router.post("/" ).handler(this::create);
 
-        logger.info("inisde the init method of credential routes");
         router.get("/").handler(this::findAll);
 
         router.put( "/:id").handler(this::update);

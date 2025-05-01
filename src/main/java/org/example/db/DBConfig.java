@@ -23,22 +23,12 @@ public class DBConfig
     {
         var dbConfig = config.getJsonObject(Constants.DB);
 
-        var host = dbConfig.getString(Constants.DB_HOST, Constants.DEFAULT_DB_HOST);
-
-        var port = dbConfig.getInteger(Constants.DB_PORT, Constants.DEFAULT_DB_PORT);
-
-        var database = dbConfig.getString(Constants.DB_DATABASE, Constants.DEFAULT_DB_DATABASE);
-
-        var user = dbConfig.getString(Constants.DB_USER, Constants.DEFAULT_DB_USER);
-
-        var password = dbConfig.getString(Constants.DB_PASSWORD, Constants.DEFAULT_DB_PASSWORD);
-
         var connectOptions = new PgConnectOptions()
-                .setPort(port)
-                .setHost(host)
-                .setDatabase(database)
-                .setUser(user)
-                .setPassword(password);
+                .setPort(dbConfig.getInteger(Constants.DB_PORT, Constants.DEFAULT_DB_PORT))
+                .setHost(dbConfig.getString(Constants.DB_HOST, Constants.DEFAULT_DB_HOST))
+                .setDatabase(dbConfig.getString(Constants.DB_DATABASE, Constants.DEFAULT_DB_DATABASE))
+                .setUser( dbConfig.getString(Constants.DB_USER, Constants.DEFAULT_DB_USER))
+                .setPassword(dbConfig.getString(Constants.DB_PASSWORD, Constants.DEFAULT_DB_PASSWORD));
 
         var poolOptions = new PoolOptions()
                 .setMaxSize(dbConfig.getInteger(Constants.DB_POOL_SIZE, Constants.DEFAULT_DB_POOL_SIZE));
