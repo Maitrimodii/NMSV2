@@ -31,7 +31,7 @@ public class DiscoveryRoutes extends BaseApi
 
     public DiscoveryRoutes(SqlClient client)
     {
-        super(client, Constants.DISCOVERY_TABLE, Constants.DISCOVERY_MODULE, discoverySchema);
+        super(client, Constants.DISCOVERY_TABLE, Constants.DISCOVERY_MODULE, "Schema/DiscoverySchema.json");
 
         this.dbHelper = new DbQueryHelper(client);
 

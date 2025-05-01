@@ -3,14 +3,10 @@ package org.example.routes;
 import io.vertx.ext.web.Router;
 import io.vertx.sqlclient.SqlClient;
 import org.example.constants.Constants;
-
-import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-
-public class CredentialRoutes extends BaseApi
-{
+public class CredentialRoutes extends BaseApi {
 
     private static final Logger logger = LoggerFactory.getLogger(CredentialRoutes.class);
 
@@ -21,37 +17,22 @@ public class CredentialRoutes extends BaseApi
      */
     public CredentialRoutes(SqlClient client)
     {
-        super(client, Constants.CREDENTIAL_TABLE, Constants.CREDENTIAL_MODULE, CredentialSchema);
-
+        super(client, Constants.CREDENTIAL_TABLE, Constants.CREDENTIAL_MODULE, "Schema/CredentialSchema.json");
         logger.info("Initialized Credential API with table {}", Constants.CREDENTIAL_TABLE);
-
-
     }
-
-    private static final Map<String, Boolean> CredentialSchema = Map.of(
-            "name", true,
-            "type", true,
-            "attributes",true
-    );
 
     /**
      * Initializes the API routes for the Credential module.
      *
      * @param router the Vert.x Router to register the routes.
-     * @return
+     * @return the configured router.
      */
-    public Router init(Router router)
-    {
-        router.post("/" ).handler(this::create);
-
+    public Router init(Router router) {
+        router.post("/").handler(this::create);
         router.get("/").handler(this::findAll);
-
-        router.put( "/:id").handler(this::update);
-
+        router.put("/:id").handler(this::update);
         router.delete("/:id").handler(this::delete);
-
         router.get("/:id").handler(this::findOne);
-
         return router;
     }
 }

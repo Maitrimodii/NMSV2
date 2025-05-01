@@ -28,7 +28,7 @@ public class UserRoutes extends BaseApi
 
     public UserRoutes(SqlClient client, Jwt jwt)
     {
-        super(client, Constants.USER_TABLE, Constants.USER_MODULE, userSchema);
+        super(client, Constants.USER_TABLE, Constants.USER_MODULE, "Schema/UserSchema.json");
 
         this.dbHelper = new DbQueryHelper(client);
 

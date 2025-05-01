@@ -33,11 +33,47 @@ public class DBConfig
         var poolOptions = new PoolOptions()
                 .setMaxSize(dbConfig.getInteger(Constants.DB_POOL_SIZE, Constants.DEFAULT_DB_POOL_SIZE));
 
-        return PgBuilder
+        var client =  PgBuilder
                 .client()
                 .with(poolOptions)
                 .connectingTo(connectOptions)
                 .using(vertx)
                 .build();
+
+        initializeSchema(client);
+
+        return client;
+    }
+
+    private static void initializeSchema(SqlClient client)
+    {
+
+        try (var inputStream = DBConfig.class.getClassLoader().getResourceAsStream("db/Schema.sql"))
+        {
+            if (inputStream == null)
+            {
+                throw new RuntimeException("schema.sql not found");
+            }
+
+            var schemaSql = new String(inputStream.readAllBytes());
+
+            var queries = schemaSql.split(";(\\s*\\n|\\s*$)");
+
+            for (var query : queries)
+            {
+                var trimmed = query.trim();
+
+                if (!trimmed.isEmpty())
+                {
+                    client.query(trimmed).execute()
+                            .onFailure(err -> System.err.println("Schema init failed: " + err.getMessage()));
+                }
+            }
+        }
+        catch (Exception exception)
+        {
+            System.err.println("Failed to load schema.sql: " + exception.getMessage());
+            throw new RuntimeException(exception);
+        }
     }
 }

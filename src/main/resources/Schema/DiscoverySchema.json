@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "required": ["name", "ip", "credential_ids"],
+  "properties": {
+    "name": { "type": "string" },
+    "ip": { "type": "string", "format": "ipv4" },
+    "port": { "type": "number" },
+    "credential_ids": {
+      "type": "array"
+    },
+    "status": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}
