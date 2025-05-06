@@ -45,7 +45,8 @@ public class PollingEngine extends AbstractVerticle
 
         dbHelper.fetchAll(Constants.PROVISION_TABLE)
                 .onSuccess(devices -> {
-                    if (devices == null || devices.isEmpty()) {
+                    if (devices == null || devices.isEmpty())
+                    {
                         LOGGER.debug("No provisioned devices found");
                         return;
                     }
@@ -108,38 +109,44 @@ public class PollingEngine extends AbstractVerticle
      * @param resultArray The array of results returned from the plugin
      * @return Future that completes when all results are stored
      */
-    private Future<Void> processPluginResults(JsonArray resultArray) {
-        if (resultArray == null || resultArray.isEmpty()) {
+    private Future<Void> processPluginResults(JsonArray resultArray)
+    {
+        if (resultArray == null || resultArray.isEmpty())
+        {
             return Future.succeededFuture();
         }
 
         LOGGER.info("Processing plugin results for {} entries", resultArray.size());
 
-        // We'll chain all future operations to store each device's metrics
         Future<Void> resultFuture = Future.succeededFuture();
 
         // Process each result and store its metrics
-        for (int i = 0; i < resultArray.size(); i++) {
-            JsonObject result = resultArray.getJsonObject(i);
+        for (var i = 0; i < resultArray.size(); i++)
+        {
+            var result = resultArray.getJsonObject(i);
             if (result == null) {
                 continue;
             }
 
-            String status = result.getString("status", "");
-            if (!"Success".equalsIgnoreCase(status)) {
+            var status = result.getString(Constants.STATUS, "");
+            if (!Constants.SUCCESS.equalsIgnoreCase(status))
+            {
                 LOGGER.warn("Result has non-success status: {}", status);
                 continue;
             }
 
-            Integer provisionId = result.getInteger("provisionId");
-            if (provisionId == null) {
+            var provisionId = result.getInteger(Constants.PROVISION_ID);
+            if (provisionId == null)
+            {
                 LOGGER.warn("Result missing provision ID, skipping metrics storage");
                 continue;
             }
 
             // Get metrics from the result
-            JsonObject metrics = result.getJsonObject("result", new JsonObject());
-            if (metrics.isEmpty()) {
+            var metrics = result.getJsonObject(Constants.RESULT, new JsonObject());
+
+            if (metrics.isEmpty())
+            {
                 LOGGER.warn("No metrics data found for provision ID: {}", provisionId);
                 continue;
             }
@@ -147,11 +154,12 @@ public class PollingEngine extends AbstractVerticle
             // Chain this operation to our future chain
             final Integer finalProvisionId = provisionId;
             final JsonObject finalMetrics = metrics;
+
             resultFuture = resultFuture.compose(v ->
                     storeMetricsInDatabase(new JsonObject()
-                            .put("status", status)
-                            .put("result", finalMetrics)
-                            .put("provisionId", finalProvisionId))
+                            .put(Constants.STATUS, status)
+                            .put(Constants.RESULT, finalMetrics)
+                            .put(Constants.PROVISION_ID, finalProvisionId))
             );
         }
 
@@ -207,10 +215,10 @@ public class PollingEngine extends AbstractVerticle
                                 }
 
                                 var context = new JsonObject()
-                                        .put("ip", ip)
-                                        .put("port", port)
-                                        .put("credentials", formatCredentials(profiles))
-                                        .put("provisionId", provisionId);
+                                        .put(Constants.IP, ip)
+                                        .put(Constants.PORT, port)
+                                        .put(Constants.CREDENTIALS, formatCredentials(profiles))
+                                        .put(Constants.PROVISION_ID, provisionId);
 
                                 return Future.succeededFuture(context);
                             });
@@ -261,7 +269,7 @@ public class PollingEngine extends AbstractVerticle
 
             if (credential != null)
             {
-                var attributesStr = credential.getString("attributes");
+                var attributesStr = credential.getString(Constants.ATTRIBUTES);
 
                 JsonObject attributes;
 
@@ -274,15 +282,15 @@ public class PollingEngine extends AbstractVerticle
 
                     LOGGER.warn("Skipping credential ID {} due to invalid attributes JSON: {}",
 
-                            credential.getInteger("id", i), exception.getMessage());
+                            credential.getInteger(Constants.FIELD_ID, i), exception.getMessage());
 
                     continue;
                 }
 
                 var formattedCredential = new JsonObject()
-                        .put("credential.name", credential.getString("name", "credential_" + credential.getInteger("id", i)))
-                        .put("credential.type", credential.getString("type", "ssh"))
-                        .put("attributes", attributes);
+                        .put(Constants.CREDENTIAL_NAME, credential.getString("name", "credential_" + credential.getInteger(Constants.FIELD_ID, i)))
+                        .put(Constants.CREDENTIAL_TYPE, credential.getString(Constants.TYPE, Constants.SSH))
+                        .put(Constants.ATTRIBUTES, attributes);
                 formattedCredentials.add(formattedCredential);
             }
         }
@@ -292,8 +300,8 @@ public class PollingEngine extends AbstractVerticle
     private JsonObject createGoPluginInput(JsonArray contexts)
     {
         return new JsonObject()
-                .put("requestType", "Collect")
-                .put("contexts", contexts);
+                .put(Constants.REQUEST_TYPE, Constants.COLLECT)
+                .put(Constants.CONTEXTS, contexts);
     }
 
     /**
@@ -304,39 +312,46 @@ public class PollingEngine extends AbstractVerticle
      */
     private Future<Void> storeMetricsInDatabase(JsonObject result)
     {
-        if (result == null || !result.containsKey("status") ||
-                !result.getString("status").equalsIgnoreCase("Success")) {
+        if (result == null || !result.containsKey(Constants.STATUS) ||
+                !result.getString(Constants.STATUS).equalsIgnoreCase(Constants.SUCCESS))
+        {
             return Future.succeededFuture();
         }
 
         // Extract provision ID from the result
-        var provisionId = result.getInteger("provisionId", -1);
-        if (provisionId == -1) {
+        var provisionId = result.getInteger(Constants.PROVISION_ID, -1);
+
+        if (provisionId == -1)
+        {
             LOGGER.warn("Missing provision ID in result, cannot store metrics");
             return Future.succeededFuture();
         }
 
         // Extract the data (metrics) from the result
-        var data = result.getJsonObject("result", new JsonObject());
-        if (data.isEmpty()) {
+        var data = result.getJsonObject(Constants.RESULT, new JsonObject());
+
+        if (data.isEmpty())
+        {
             LOGGER.warn("No metrics data found for provision ID: {}", provisionId);
+
             return Future.succeededFuture();
         }
 
-        long timestampMillis = System.currentTimeMillis();
+        var timestampMillis = System.currentTimeMillis();
+
         var timestamp = LocalDateTime.ofInstant(
                 Instant.ofEpochMilli(timestampMillis), ZoneOffset.UTC);
 
         // Create insert record with provision ID, data and timestamp
         var record = new JsonObject()
-                .put("provision_id", provisionId)
-                .put("data", data.encode())
-                .put("timestamp", timestamp);
+                .put(Constants.PROVISION_ID, provisionId)
+                .put(Constants.DATA, data)
+                .put(Constants.TIMESTAMP, timestamp);
 
         LOGGER.info("Storing metrics in database for provision ID: {}", provisionId);
 
         return dbHelper.insert(Constants.POLLING_TABLE, record)
-                .onSuccess(id -> LOGGER.info("Metrics stored with ID: {}", id))
+                .onSuccess(id -> LOGGER.info("Metrics stored"))
                 .onFailure(err -> LOGGER.error("Failed to store metrics: {}", err.getMessage()))
                 .mapEmpty();
     }

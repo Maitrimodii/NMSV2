@@ -73,6 +73,8 @@ public final class Constants
 
     public static final String DISCOVERY = "Discovery";
 
+    public static final String CREDENTIALS = "Credentials";
+
     public static final String DISCOVERY_ID = "discovery_id";
 
     public static final String IP = "ip";
@@ -104,6 +106,20 @@ public final class Constants
 
     public static final String PROVISION_SCEHMA = "Schema/ProvisionSchema.json";
 
+    public static final String  SCHEMA = "db/Schema.sql";
+
+    //SQL query templates
+
+    public static final String SQL_INSERT = "INSERT INTO %s (%s) VALUES (%s)";
+
+    public static final String SQL_UPDATE = "UPDATE %s SET %s WHERE %s = $%d";
+
+    public static final String SQL_DELETE= "DELETE FROM %s WHERE %s = $1";
+
+    public static final String SQL_SELECT_ONE = "SELECT * FROM %s WHERE %s = $1";
+
+    public static final String SQL_SELECT_ALL = "SELECT * FROM %s";
+
     //HTTP status code
 
     public static final int HTTP_OK = 200;
@@ -117,5 +133,34 @@ public final class Constants
     public static final int HTTP_NOT_FOUND = 404;
 
     public static final int HTTP_INTERNAL_SERVER_ERROR = 500;
+
+    public static final String TYPE = "type";
+
+    public static final String SSH = "ssh";
+
+    public static final String CREDENTIAL_NAME = "credential.name";
+
+    public static final String CREDENTIAL_TYPE = "credential.type";
+
+    public static final String ATTRIBUTES = "attributes";
+
+    public static final String CONTEXTS = "contexts";
+
+    public static final String PROVISION_ID = "provisionId";
+
+    public static final String RESULT = "result";
+
+    public static final String COLLECT = "collect";
+
+    public static final String DATA = "data";
+
+    public static final String TIMESTAMP = "timestamp";
+
+    public static final String PENDING = "pending";
+
+    public static final String DOWN = "down";
+
+    public static final String UP = "up";
+
 
 }

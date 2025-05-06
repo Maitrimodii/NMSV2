@@ -7,6 +7,7 @@ import io.vertx.sqlclient.Row;
 import io.vertx.sqlclient.RowSet;
 import io.vertx.sqlclient.SqlClient;
 import io.vertx.sqlclient.Tuple;
+import org.example.constants.Constants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -48,7 +49,7 @@ public class DbQueryHelper
                 .mapToObj(i -> "$" + i)
                 .collect(Collectors.joining(", "));
 
-        var query = String.format("INSERT INTO %s (%s) VALUES (%s)", table, columns, placeholders);
+        var query = String.format(Constants.SQL_INSERT, table, columns, placeholders);
 
         var values = Tuple.tuple();
 
@@ -89,7 +90,7 @@ public class DbQueryHelper
                 .mapToObj(i -> fieldNames.get(i - 1) + " = $" + i)
                 .collect(Collectors.joining(", "));
 
-        var query = String.format("UPDATE %s SET %s WHERE %s = $%d", table, setClause, idColumn, fieldNames.size() + 1);
+        var query = String.format(Constants.SQL_UPDATE, table, setClause, idColumn, fieldNames.size() + 1);
 
         var values = Tuple.tuple();
 
@@ -116,7 +117,7 @@ public class DbQueryHelper
      */
     public Future<Void> delete(String table, String idColumn, Object idValue)
     {
-        var query = String.format("DELETE FROM %s WHERE %s = $1", table, idColumn);
+        var query = String.format(Constants.SQL_DELETE, table, idColumn);
 
         logger.info("Executing DELETE query: {}", query);
 
@@ -136,7 +137,7 @@ public class DbQueryHelper
      */
     public Future<JsonObject> fetchOne(String table, String idColumn, Object idValue)
     {
-        var query = String.format("SELECT * FROM %s WHERE %s = $1", table, idColumn);
+        var query = String.format(Constants.SQL_SELECT_ONE, table, idColumn);
 
         logger.info("Executing SELECT query: {}", query);
 
@@ -159,7 +160,7 @@ public class DbQueryHelper
      */
     public Future<List<JsonObject>> fetchAll(String table)
     {
-        var query = String.format("SELECT * FROM %s", table);
+        var query = String.format(Constants.SQL_SELECT_ALL, table);
 
         logger.info("Executing SELECT ALL query: {}", query);
 

@@ -35,11 +35,10 @@ CREATE TABLE IF NOT EXISTS provisions (
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE polling (
+CREATE TABLE IF NOT EXISTS polling (
     polling_id   SERIAL PRIMARY KEY,
     provision_id INT NOT NULL,
     data         JSONB NOT NULL,
-    timestamp    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (provision_id) REFERENCES provisions(id) ON DELETE CASCADE
+    timestamp    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

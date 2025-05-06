@@ -5,6 +5,7 @@ import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
+import org.example.constants.Constants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,9 +41,9 @@ public class ProcessBuilderUtil
         {
             try
             {
-                var ip = discoveryProfile.getString("ip");
+                var ip = discoveryProfile.getString(Constants.IP);
 
-                var port = discoveryProfile.getInteger("port", 22);
+                var port = discoveryProfile.getInteger(Constants.PORT, 22);
 
                 if (ip == null || ip.isEmpty())
                 {
@@ -76,9 +77,9 @@ public class ProcessBuilderUtil
                 LOGGER.info("Device is available at IP: {}, Port: {}", ip, port);
                 promise.complete(true);
             }
-            catch (Exception e)
+            catch (Exception exception)
             {
-                LOGGER.error("Error checking availability: {}", e.getMessage(), e);
+                LOGGER.error("Error checking availability: {}", exception.getMessage(), exception);
 
                 promise.complete(false);
             }
@@ -129,7 +130,6 @@ public class ProcessBuilderUtil
 
     private static boolean checkPort(String ip, int port)
     {
-        // No changes needed
         try (var socket = new Socket()) {
 
             socket.connect(new InetSocketAddress(ip, port), SOCKET_TIMEOUT_MS);
@@ -254,13 +254,16 @@ public class ProcessBuilderUtil
                     try {
                         // Handle case where result is a single object instead of array
                         var result = new JsonObject(outputStr);
+
                         LOGGER.info("Go plugin output object: {}", result.encode());
 
                         // Create an array with the single result object
                         var resultArray = new JsonArray().add(result);
+
                         blockingPromise.complete(resultArray);
                     }
-                    catch (Exception exception2) {
+                    catch (Exception exception2)
+                    {
                         LOGGER.error("Failed to parse JSON output: {}, raw output: {}", exception.getMessage(), outputStr);
                         blockingPromise.complete(null);
                     }

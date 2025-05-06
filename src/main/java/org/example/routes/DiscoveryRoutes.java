@@ -73,12 +73,12 @@ public class DiscoveryRoutes extends BaseApi
                             .map(message -> (JsonObject) message.body());
                 })
 
-                .onSuccess(result -> ApiResponse.success(ctx, result, result.getString("error_message"), 200))
+                .onSuccess(result -> ApiResponse.success(ctx, result, result.getString("error_message"), Constants.HTTP_OK))
 
                 .onFailure(err -> {
                     logger.error("Run discovery failed for id={}: {}", discoveryId, err.getMessage());
 
-                    ApiResponse.error(ctx, err.getMessage(), 400);
+                    ApiResponse.error(ctx, err.getMessage(), Constants.HTTP_BAD_REQUEST);
                 });
     }
 

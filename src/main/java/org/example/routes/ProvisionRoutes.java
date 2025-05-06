@@ -69,12 +69,12 @@ public class ProvisionRoutes extends BaseApi
                             .onSuccess(res -> ApiResponse.success(ctx, provisionData, "Device provisioning started", 201))
                             .onFailure(err -> {
                                 logger.error("Failed to create provision entry: {}", err.getMessage());
-                                ApiResponse.error(ctx, "Failed to start provisioning", 500);
+                                ApiResponse.error(ctx, "Failed to start provisioning", Constants.HTTP_INTERNAL_SERVER_ERROR);
                             });
                 })
                 .onFailure(err -> {
                     logger.error("Provision verification failed: {}", err.getMessage());
-                    ApiResponse.error(ctx, err.getMessage(), 400);
+                    ApiResponse.error(ctx, err.getMessage(), Constants.HTTP_BAD_REQUEST);
                 });
     }
 
@@ -95,7 +95,7 @@ public class ProvisionRoutes extends BaseApi
 
                     var status = discovery.getString(Constants.STATUS);
 
-                    if (status == null || status.equals("pending"))
+                    if (status == null || status.equals(Constants.PENDING))
                     {
                         return Future.failedFuture("Discovery is still pending or in invalid state");
                     }

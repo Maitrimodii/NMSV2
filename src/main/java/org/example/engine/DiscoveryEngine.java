@@ -116,7 +116,7 @@ public class DiscoveryEngine extends AbstractVerticle
 
                                             // For discovery, extract the status from the first result object
                                             var firstResult = resultArray.getJsonObject(0);
-                                            if (firstResult != null && "Success".equalsIgnoreCase(firstResult.getString("status", "")))
+                                            if (firstResult != null && Constants.SUCCESS.equalsIgnoreCase(firstResult.getString(Constants.STATUS, "")))
                                             {
                                                 result.put(Constants.STATUS, Constants.SUCCESS);
                                             }
@@ -129,7 +129,7 @@ public class DiscoveryEngine extends AbstractVerticle
                                         });
                             })
                             .compose(res -> {
-                                var finalStatus = res.getString(Constants.STATUS).equals(Constants.SUCCESS) ? "up" : "down";
+                                var finalStatus = res.getString(Constants.STATUS).equals(Constants.SUCCESS) ? Constants.UP : Constants.DOWN;
 
                                 var updateFields = new JsonObject().put(Constants.STATUS, finalStatus);
 
@@ -168,7 +168,7 @@ public class DiscoveryEngine extends AbstractVerticle
             if (credential != null)
             {
                 // Extract the attributes field as a string
-                var attributesStr = credential.getString("attributes");
+                var attributesStr = credential.getString(Constants.ATTRIBUTES);
 
                 // Parse the attributes string into a JsonObject
                 JsonObject attributes;
@@ -180,15 +180,15 @@ public class DiscoveryEngine extends AbstractVerticle
                 {
                     LOGGER.warn("Skipping credential ID {} due to invalid attributes JSON: {}",
 
-                            credential.getInteger("id", i), e.getMessage());
+                            credential.getInteger(Constants.FIELD_ID, i), e.getMessage());
                     continue;
                 }
 
                 // Create formatted credential object
                 var formattedCredential = new JsonObject()
-                        .put("credential.name", credential.getString("name", "credential_" + credential.getInteger("id", i)))
-                        .put("credential.type", credential.getString("type", "ssh"))
-                        .put("attributes", attributes);
+                        .put(Constants.CREDENTIAL_NAME, credential.getString("name", "credential_" + credential.getInteger(Constants.FIELD_ID, i)))
+                        .put(Constants.CREDENTIAL_TYPE, credential.getString(Constants.TYPE, Constants.SSH))
+                        .put(Constants.ATTRIBUTES, attributes);
 
                 formattedCredentials.add(formattedCredential);
             }
@@ -196,16 +196,16 @@ public class DiscoveryEngine extends AbstractVerticle
 
         // Create input object with requestType and contexts array
         var context = new JsonObject()
-                .put("ip", ip)
-                .put("port", port)
-                .put("credentials", formattedCredentials);
+                .put(Constants.IP, ip)
+                .put(Constants.PORT, port)
+                .put(Constants.CREDENTIALS, formattedCredentials);
 
         // Create array of contexts
         var contextsArray = new JsonArray().add(context);
 
         return new JsonObject()
-                .put("requestType", "Discovery")
-                .put("contexts", contextsArray);
+                .put(Constants.REQUEST_TYPE, Constants.DISCOVERY)
+                .put(Constants.CONTEXTS, contextsArray);
     }
 
     /**

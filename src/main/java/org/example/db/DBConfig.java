@@ -48,7 +48,7 @@ public class DBConfig
     private static void initializeSchema(SqlClient client)
     {
 
-        try (var inputStream = DBConfig.class.getClassLoader().getResourceAsStream("db/Schema.sql"))
+        try (var inputStream = DBConfig.class.getClassLoader().getResourceAsStream(Constants.SCHEMA))
         {
             if (inputStream == null)
             {
