@@ -86,6 +86,11 @@ public class ProcessBuilderUtil
         });
     }
 
+    /**
+     * Pings the device to check its availability
+     * @param ip
+     * @return true if the device is reachable, false otherwise
+     */
     private static boolean pingDevice(String ip)
     {
         // No changes needed
@@ -128,6 +133,12 @@ public class ProcessBuilderUtil
         }
     }
 
+    /**
+     * Checks if the specified port is open on the device
+     * @param ip
+     * @param port
+     * @return true if the port is open, false otherwise
+     */
     private static boolean checkPort(String ip, int port)
     {
         try (var socket = new Socket()) {

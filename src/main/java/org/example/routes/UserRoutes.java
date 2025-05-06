@@ -30,6 +30,11 @@ public class UserRoutes extends BaseApi
         this.jwt = jwt;
     }
 
+    /**
+     * Validates the request body for user registration and login.
+     * @param password
+     * @return String of hashed password
+     */
     private String hashPassword(String password)
     {
         try
@@ -47,6 +52,7 @@ public class UserRoutes extends BaseApi
             return null;
         }
     }
+
 
     private void register (RoutingContext ctx)
     {
@@ -73,6 +79,7 @@ public class UserRoutes extends BaseApi
                     ApiResponse.error(ctx, err.getMessage(), Constants.HTTP_BAD_REQUEST);
                 });
     }
+
 
     protected void login(RoutingContext ctx)
     {

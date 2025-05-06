@@ -29,6 +29,20 @@ public class DiscoveryRoutes extends BaseApi
     }
 
 
+    /**
+     * Initiates a discovery process for a specific discovery profile.
+     * <p>
+     * This method performs the following steps:
+     * <ul>
+     *   <li>Extracts the discovery ID from the request path.</li>
+     *   <li>Fetches the corresponding discovery record from the database.</li>
+     *   <li>Parses the credential IDs and prepares a payload.</li>
+     *   <li>Sends the payload to the {@code DiscoveryEngine} via the event bus.</li>
+     *   <li>Handles success or failure response and sends appropriate API response.</li>
+     * </ul>
+     *
+     * @param ctx the Vert.x {@link RoutingContext} containing the HTTP request context
+     */
     public void runDiscovery(RoutingContext ctx)
     {
         var discoveryId = ctx.pathParam(FIELD_ID);
@@ -82,6 +96,11 @@ public class DiscoveryRoutes extends BaseApi
                 });
     }
 
+    /**
+     * Initializes the routes for the discovery API.
+     * @param router
+     * @return
+     */
     public Router init(Router router)
     {
         router.post("/").handler(this::create);

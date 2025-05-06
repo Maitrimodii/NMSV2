@@ -16,11 +16,17 @@ public abstract class BaseApi
 {
 
     protected final String tableName;
+
     protected final String moduleName;
+
     protected final DbQueryHelper dbHelper;
+
     protected final JsonSchema jsonSchema;
+
     private static final Logger logger = LoggerFactory.getLogger(BaseApi.class);
+
     public static final String FIELD_ID = "id";
+
     private static final ObjectMapper mapper = new ObjectMapper();
 
     protected BaseApi(SqlClient client, String tableName, String moduleName, String schemaPath)
@@ -98,6 +104,12 @@ public abstract class BaseApi
         }
     }
 
+    /**
+     * Parses the ID from the request path parameter.
+     *
+     * @param ctx the routing context containing the request.
+     * @return the parsed ID, or null if parsing fails.
+     */
     protected Integer parseId(RoutingContext ctx)
     {
         var idParam = ctx.pathParam(FIELD_ID);
@@ -116,6 +128,11 @@ public abstract class BaseApi
         }
     }
 
+    /**
+     * Creates a new record in the table.
+     *
+     * @param ctx the routing context containing the request.
+     */
     protected void create(RoutingContext ctx)
     {
         var body = ctx.body().asJsonObject();
@@ -133,6 +150,11 @@ public abstract class BaseApi
                 });
     }
 
+    /**
+     * Updates a record with the specified ID in the table.
+     *
+     * @param ctx the routing context containing the request.
+     */
     protected void update(RoutingContext ctx)
     {
         var id = parseId(ctx);
@@ -157,6 +179,11 @@ public abstract class BaseApi
                 });
     }
 
+    /**
+     * Deletes a record with the specified ID from the table.
+     *
+     * @param ctx the routing context containing the request.
+     */
     protected void delete(RoutingContext ctx)
     {
         var id = parseId(ctx);
@@ -173,6 +200,10 @@ public abstract class BaseApi
                 });
     }
 
+    /**
+     * Fetch record with id from the specified table.
+     * @param ctx
+     */
     protected void findOne(RoutingContext ctx)
     {
         var id = parseId(ctx);
@@ -196,6 +227,11 @@ public abstract class BaseApi
                 });
     }
 
+    /**
+     * Fetches all records from the specified table.
+     *
+     * @param ctx the routing context containing the request.
+     */
     protected void findAll(RoutingContext ctx)
     {
         logger.info("Fetching all {} records", moduleName);

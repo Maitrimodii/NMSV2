@@ -39,6 +39,9 @@ public class PollingEngine extends AbstractVerticle
         promise.complete();
     }
 
+    /**
+     * Polls devices from the database and processes them
+     */
     private void pollDevices()
     {
         LOGGER.debug("Starting device polling cycle");
@@ -56,6 +59,12 @@ public class PollingEngine extends AbstractVerticle
                 .onFailure(err -> LOGGER.error("Failed to fetch provisions: {}", err.getMessage()));
     }
 
+    /**
+     * Processes the list of provisioned devices
+     *
+     * @param devices List of provisioned devices
+     * @return Future that completes when all devices are processed
+     */
     private Future<Void> processDevices(List<JsonObject> devices)
     {
         LOGGER.info("Processing {} provisioned devices", devices.size());
@@ -166,6 +175,12 @@ public class PollingEngine extends AbstractVerticle
         return resultFuture;
     }
 
+    /**
+     * Collects device metrics by checking availability and fetching credentials
+     *
+     * @param device The device JSON object containing IP, port, and credential IDs
+     * @return Future that completes with the context for the device
+     */
     private Future<JsonObject> collectDeviceMetrics(JsonObject device)
     {
         var ip = device.getString(Constants.IP);
@@ -226,6 +241,12 @@ public class PollingEngine extends AbstractVerticle
     }
 
 
+    /**
+     * Fetches credential profiles from the database based on the provided credential IDs
+     *
+     * @param credentialIds The array of credential IDs
+     * @return Future that completes with the array of credential profiles
+     */
     private Future<JsonArray> fetchCredentialProfiles(JsonArray credentialIds)
     {
         var profiles = new JsonArray();
@@ -259,6 +280,11 @@ public class PollingEngine extends AbstractVerticle
         return future;
     }
 
+    /**
+     * Formats the credentials into a JSON array
+     * @param credentialProfiles
+     * @return
+     */
     private JsonArray formatCredentials(JsonArray credentialProfiles)
     {
         var formattedCredentials = new JsonArray();
@@ -297,6 +323,11 @@ public class PollingEngine extends AbstractVerticle
         return formattedCredentials;
     }
 
+    /**
+     * Creates the input for the Go plugin
+     * @param contexts
+     * @return
+     */
     private JsonObject createGoPluginInput(JsonArray contexts)
     {
         return new JsonObject()
