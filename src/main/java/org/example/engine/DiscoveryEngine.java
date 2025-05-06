@@ -107,17 +107,16 @@ public class DiscoveryEngine extends AbstractVerticle
                                 LOGGER.info("Plugin input: {}", pluginInput.encode());
 
                                 return ProcessBuilderUtil.spawnPluginEngine(vertx, pluginInput)
-                                        .compose(pluginResult -> {
-
-                                            if (pluginResult == null)
+                                        .compose(resultArray -> {
+                                            if (resultArray == null || resultArray.isEmpty())
                                             {
                                                 result.put(Constants.STATUS, Constants.FAIL);
-
                                                 return Future.succeededFuture(result);
                                             }
 
-                                            // Determine final status
-                                            if (pluginResult.equals("Success"))
+                                            // For discovery, extract the status from the first result object
+                                            var firstResult = resultArray.getJsonObject(0);
+                                            if (firstResult != null && "Success".equalsIgnoreCase(firstResult.getString("status", "")))
                                             {
                                                 result.put(Constants.STATUS, Constants.SUCCESS);
                                             }
@@ -130,7 +129,7 @@ public class DiscoveryEngine extends AbstractVerticle
                                         });
                             })
                             .compose(res -> {
-                                var  finalStatus = res.getString(Constants.STATUS).equals("Success") ? "up" : "down";
+                                var finalStatus = res.getString(Constants.STATUS).equals(Constants.SUCCESS) ? "up" : "down";
 
                                 var updateFields = new JsonObject().put(Constants.STATUS, finalStatus);
 
@@ -142,7 +141,6 @@ public class DiscoveryEngine extends AbstractVerticle
                                             LOGGER.info("Discovery status updated successfully for id={}", discoveryId);
                                             return res;
                                         })
-
                                         .otherwise(err -> {
                                             LOGGER.error("Failed to update discovery status for id={}: {}", discoveryId, err.getMessage());
                                             return res;

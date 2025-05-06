@@ -64,6 +64,8 @@ public final class Constants
 
     public static final String USER_MODULE = "user";
 
+    public static final String POLLING_TABLE = "polling";
+
     // Field names
     public static final String FIELD_ID = "id";
 

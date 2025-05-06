@@ -35,6 +35,7 @@ public class ProcessBuilderUtil
      */
     public static Future<Boolean> checkAvailability(Vertx vertx, JsonObject discoveryProfile)
     {
+        // No changes needed here - this method works as expected
         return vertx.executeBlocking(promise ->
         {
             try
@@ -86,6 +87,7 @@ public class ProcessBuilderUtil
 
     private static boolean pingDevice(String ip)
     {
+        // No changes needed
         try
         {
             var command = new String[]{"ping", "-c", "1", "-W", String.valueOf(PING_TIMEOUT_MS / 1000), ip};
@@ -127,6 +129,7 @@ public class ProcessBuilderUtil
 
     private static boolean checkPort(String ip, int port)
     {
+        // No changes needed
         try (var socket = new Socket()) {
 
             socket.connect(new InetSocketAddress(ip, port), SOCKET_TIMEOUT_MS);
@@ -145,11 +148,11 @@ public class ProcessBuilderUtil
      *
      * @param vertx Vertx instance to execute blocking operations
      * @param pluginInput JSON array with plugin input
-     * @return Future with plugin execution result
+     * @return Future with plugin execution result as a JsonArray or null on failure
      */
-    public static Future<String> spawnPluginEngine(Vertx vertx, JsonArray pluginInput)
+    public static Future<JsonArray> spawnPluginEngine(Vertx vertx, JsonArray pluginInput)
     {
-        Promise<String> promise = Promise.promise();
+        Promise<JsonArray> promise = Promise.promise();
 
         vertx.executeBlocking(blockingPromise ->
         {
@@ -196,15 +199,12 @@ public class ProcessBuilderUtil
                 var output = new StringBuilder();
 
                 try (var reader = new BufferedReader(
-
                         new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
 
                     String line;
 
                     while ((line = reader.readLine()) != null) {
-
                         output.append(line);
-
                     }
                 }
 
@@ -247,41 +247,27 @@ public class ProcessBuilderUtil
                         return;
                     }
 
-                    var firstResult = resultArray.getJsonObject(0);
-
-                    if (firstResult == null) {
-                        LOGGER.error("Go plugin returned null JSON object");
-
-                        blockingPromise.complete(null);
-
-                        return;
-                    }
-
-                    var status = firstResult.getString("status", "");
-
-                    if ("Success".equalsIgnoreCase(status)) {
-                        LOGGER.warn("Go plugin operation succeed: {}", firstResult.encode());
-                    }
-
-                    blockingPromise.complete(status);
-                } catch (Exception exception) {
+                    // Instead of extracting just the status, return the entire result array
+                    blockingPromise.complete(resultArray);
+                }
+                catch (Exception exception) {
                     try {
+                        // Handle case where result is a single object instead of array
                         var result = new JsonObject(outputStr);
-
                         LOGGER.info("Go plugin output object: {}", result.encode());
 
-                        blockingPromise.complete("fail");
-                    } catch (Exception exception2) {
-
+                        // Create an array with the single result object
+                        var resultArray = new JsonArray().add(result);
+                        blockingPromise.complete(resultArray);
+                    }
+                    catch (Exception exception2) {
                         LOGGER.error("Failed to parse JSON output: {}, raw output: {}", exception.getMessage(), outputStr);
-
                         blockingPromise.complete(null);
                     }
                 }
             }
             catch (IOException exception)
             {
-
                 LOGGER.error("I/O error spawning Go plugin: {}", exception.getMessage(), exception);
 
                 blockingPromise.complete(null);
@@ -304,7 +290,7 @@ public class ProcessBuilderUtil
         }).onComplete(ar -> {
             if (ar.succeeded())
             {
-                promise.complete((String) ar.result());
+                promise.complete((JsonArray) ar.result());
             }
             else
             {

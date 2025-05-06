@@ -11,13 +11,16 @@ import org.example.utils.ProcessBuilderUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 
 public class PollingEngine extends AbstractVerticle
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(PollingEngine.class);
 
-    private static final long POLLING_INTERVAL_MS = 10_000; // 10 seconds
+    private static final long POLLING_INTERVAL_MS = 10_000;
 
     private final DbQueryHelper dbHelper;
 
@@ -26,6 +29,7 @@ public class PollingEngine extends AbstractVerticle
         this.dbHelper = dbHelper;
     }
 
+    @Override
     public void start(Promise<Void> promise)
     {
         vertx.setPeriodic(POLLING_INTERVAL_MS, id -> pollDevices());
@@ -41,11 +45,8 @@ public class PollingEngine extends AbstractVerticle
 
         dbHelper.fetchAll(Constants.PROVISION_TABLE)
                 .onSuccess(devices -> {
-                    if (devices == null || devices.isEmpty())
-                    {
-
+                    if (devices == null || devices.isEmpty()) {
                         LOGGER.debug("No provisioned devices found");
-
                         return;
                     }
                     processDevices(devices)
@@ -57,23 +58,115 @@ public class PollingEngine extends AbstractVerticle
     private Future<Void> processDevices(List<JsonObject> devices)
     {
         LOGGER.info("Processing {} provisioned devices", devices.size());
+        var contexts = new JsonArray();
 
-        var future = Future.<Void>succeededFuture();
+        // Collect contexts for all devices
+        var collectFuture = Future.succeededFuture(contexts);
 
         for (var device : devices)
         {
-            future = future.compose(v -> collectDeviceMetrics(device));
+            collectFuture = collectFuture.compose(res ->
+                    collectDeviceMetrics(device).map(context -> {
+                        if (context != null) {
+                            res.add(context);
+                        }
+                        return res;
+                    })
+            );
         }
-        return future;
+
+        return collectFuture.compose(contextsArray -> {
+            if (contextsArray.isEmpty())
+            {
+                LOGGER.debug("No valid device contexts to process");
+                return Future.succeededFuture();
+            }
+
+            var goPluginInput = createGoPluginInput(contextsArray);
+
+            var pluginInput = new JsonArray().add(goPluginInput);
+
+            return ProcessBuilderUtil.spawnPluginEngine(vertx, pluginInput)
+                    .compose(resultArray -> {
+                        if (resultArray == null || resultArray.isEmpty())
+                        {
+                            LOGGER.warn("Failed to collect metrics for devices");
+                            return Future.succeededFuture();
+                        }
+
+                        LOGGER.info("Successfully collected metrics for devices");
+
+                        // Process and store the results from the Go plugin
+                        return processPluginResults(resultArray);
+                    });
+        });
     }
 
-    private Future<Void> collectDeviceMetrics(JsonObject device)
+    /**
+     * Process plugin results and store them in the database
+     *
+     * @param resultArray The array of results returned from the plugin
+     * @return Future that completes when all results are stored
+     */
+    private Future<Void> processPluginResults(JsonArray resultArray) {
+        if (resultArray == null || resultArray.isEmpty()) {
+            return Future.succeededFuture();
+        }
+
+        LOGGER.info("Processing plugin results for {} entries", resultArray.size());
+
+        // We'll chain all future operations to store each device's metrics
+        Future<Void> resultFuture = Future.succeededFuture();
+
+        // Process each result and store its metrics
+        for (int i = 0; i < resultArray.size(); i++) {
+            JsonObject result = resultArray.getJsonObject(i);
+            if (result == null) {
+                continue;
+            }
+
+            String status = result.getString("status", "");
+            if (!"Success".equalsIgnoreCase(status)) {
+                LOGGER.warn("Result has non-success status: {}", status);
+                continue;
+            }
+
+            Integer provisionId = result.getInteger("provisionId");
+            if (provisionId == null) {
+                LOGGER.warn("Result missing provision ID, skipping metrics storage");
+                continue;
+            }
+
+            // Get metrics from the result
+            JsonObject metrics = result.getJsonObject("result", new JsonObject());
+            if (metrics.isEmpty()) {
+                LOGGER.warn("No metrics data found for provision ID: {}", provisionId);
+                continue;
+            }
+
+            // Chain this operation to our future chain
+            final Integer finalProvisionId = provisionId;
+            final JsonObject finalMetrics = metrics;
+            resultFuture = resultFuture.compose(v ->
+                    storeMetricsInDatabase(new JsonObject()
+                            .put("status", status)
+                            .put("result", finalMetrics)
+                            .put("provisionId", finalProvisionId))
+            );
+        }
+
+        return resultFuture;
+    }
+
+    private Future<JsonObject> collectDeviceMetrics(JsonObject device)
     {
         var ip = device.getString(Constants.IP);
 
         var port = device.getInteger(Constants.PORT, 22);
 
         var credentialIdsStr = device.getString(Constants.CREDENTIAL_IDS);
+
+        var provisionId = device.getInteger(Constants.FIELD_ID);
 
         JsonArray credentialIds;
         try
@@ -84,7 +177,7 @@ public class PollingEngine extends AbstractVerticle
         {
             LOGGER.warn("Invalid credential_ids format for device IP: {}: {}", ip, credentialIdsStr);
 
-            return Future.succeededFuture();
+            return Future.succeededFuture(null);
         }
 
         LOGGER.debug("Checking availability for device IP: {}, Port: {}", ip, port);
@@ -99,37 +192,31 @@ public class PollingEngine extends AbstractVerticle
                     {
                         LOGGER.warn("Device not available at IP: {}, Port: {}", ip, port);
 
-                        return Future.succeededFuture();
+                        return Future.succeededFuture(null);
                     }
 
-                    LOGGER.debug("Device available, collecting metrics for IP: {}", ip);
+                    LOGGER.debug("Device available, preparing context for IP: {}", ip);
+
                     return fetchCredentialProfiles(credentialIds)
                             .compose(profiles -> {
                                 if (profiles.isEmpty())
                                 {
-
                                     LOGGER.warn("No valid credentials for device IP: {}", ip);
 
-                                    return Future.succeededFuture();
+                                    return Future.succeededFuture(null);
                                 }
 
-                                var goPluginInput = createGoPluginInput(ip, port, profiles);
+                                var context = new JsonObject()
+                                        .put("ip", ip)
+                                        .put("port", port)
+                                        .put("credentials", formatCredentials(profiles))
+                                        .put("provisionId", provisionId);
 
-                                var pluginInput = new JsonArray().add(goPluginInput);
-
-                                return ProcessBuilderUtil.spawnPluginEngine(vertx, pluginInput)
-                                        .compose(pluginResult -> {
-                                            if (pluginResult == null || !pluginResult.equalsIgnoreCase("Success")) {
-                                                LOGGER.warn("Failed to collect metrics for device IP: {}", ip);
-                                                return Future.succeededFuture();
-                                            }
-
-                                            LOGGER.info("Successfully collected metrics for device IP: {}", ip);
-                                            return Future.succeededFuture();
-                                        });
+                                return Future.succeededFuture(context);
                             });
                 });
     }
+
 
     private Future<JsonArray> fetchCredentialProfiles(JsonArray credentialIds)
     {
@@ -144,20 +231,17 @@ public class PollingEngine extends AbstractVerticle
             if (!(idObj instanceof Integer credentialId))
             {
                 LOGGER.warn("Invalid credential ID format at index {}: {}", i, idObj);
+
                 continue;
             }
 
             future = future.compose(res ->
                     dbHelper.fetchOne(Constants.CREDENTIAL_TABLE, Constants.FIELD_ID, credentialId)
                             .map(credential -> {
-                                if (credential != null)
-                                {
+                                if (credential != null) {
                                     credential.put(Constants.CREDENTIAL_ID, credentialId);
-
                                     res.add(credential);
-                                }
-                                else
-                                {
+                                } else {
                                     LOGGER.warn("Credential not found with ID: {}", credentialId);
                                 }
                                 return res;
@@ -167,7 +251,7 @@ public class PollingEngine extends AbstractVerticle
         return future;
     }
 
-    private JsonObject createGoPluginInput(String ip, Integer port, JsonArray credentialProfiles)
+    private JsonArray formatCredentials(JsonArray credentialProfiles)
     {
         var formattedCredentials = new JsonArray();
 
@@ -181,13 +265,17 @@ public class PollingEngine extends AbstractVerticle
 
                 JsonObject attributes;
 
-                try {
+                try
+                {
                     attributes = new JsonObject(attributesStr);
                 }
                 catch (Exception exception)
                 {
+
                     LOGGER.warn("Skipping credential ID {} due to invalid attributes JSON: {}",
+
                             credential.getInteger("id", i), exception.getMessage());
+
                     continue;
                 }
 
@@ -195,18 +283,61 @@ public class PollingEngine extends AbstractVerticle
                         .put("credential.name", credential.getString("name", "credential_" + credential.getInteger("id", i)))
                         .put("credential.type", credential.getString("type", "ssh"))
                         .put("attributes", attributes);
-
                 formattedCredentials.add(formattedCredential);
             }
         }
+        return formattedCredentials;
+    }
 
-        var context = new JsonObject()
-                .put("ip", ip)
-                .put("port", port)
-                .put("credentials", formattedCredentials);
-
+    private JsonObject createGoPluginInput(JsonArray contexts)
+    {
         return new JsonObject()
                 .put("requestType", "Collect")
-                .put("contexts", new JsonArray().add(context));
+                .put("contexts", contexts);
+    }
+
+    /**
+     * Stores metrics in the database
+     *
+     * @param result The result JsonObject with status, metrics data and provision ID
+     * @return Future that completes when the metrics are stored
+     */
+    private Future<Void> storeMetricsInDatabase(JsonObject result)
+    {
+        if (result == null || !result.containsKey("status") ||
+                !result.getString("status").equalsIgnoreCase("Success")) {
+            return Future.succeededFuture();
+        }
+
+        // Extract provision ID from the result
+        var provisionId = result.getInteger("provisionId", -1);
+        if (provisionId == -1) {
+            LOGGER.warn("Missing provision ID in result, cannot store metrics");
+            return Future.succeededFuture();
+        }
+
+        // Extract the data (metrics) from the result
+        var data = result.getJsonObject("result", new JsonObject());
+        if (data.isEmpty()) {
+            LOGGER.warn("No metrics data found for provision ID: {}", provisionId);
+            return Future.succeededFuture();
+        }
+
+        long timestampMillis = System.currentTimeMillis();
+        var timestamp = LocalDateTime.ofInstant(
+                Instant.ofEpochMilli(timestampMillis), ZoneOffset.UTC);
+
+        // Create insert record with provision ID, data and timestamp
+        var record = new JsonObject()
+                .put("provision_id", provisionId)
+                .put("data", data.encode())
+                .put("timestamp", timestamp);
+
+        LOGGER.info("Storing metrics in database for provision ID: {}", provisionId);
+
+        return dbHelper.insert(Constants.POLLING_TABLE, record)
+                .onSuccess(id -> LOGGER.info("Metrics stored with ID: {}", id))
+                .onFailure(err -> LOGGER.error("Failed to store metrics: {}", err.getMessage()))
+                .mapEmpty();
     }
 }

@@ -40,6 +40,6 @@ CREATE TABLE polling (
     provision_id INT NOT NULL,
     data         JSONB NOT NULL,
     timestamp    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (provision_id) REFERENCES provision(id) ON DELETE CASCADE
+    FOREIGN KEY (provision_id) REFERENCES provisions(id) ON DELETE CASCADE
 );
 
