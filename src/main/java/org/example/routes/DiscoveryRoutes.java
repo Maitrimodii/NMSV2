@@ -13,25 +13,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 
-import java.util.Map;
-
 public class DiscoveryRoutes extends BaseApi
 {
     private static final Logger logger = LoggerFactory.getLogger(DiscoveryRoutes.class);
 
     protected final DbQueryHelper dbHelper;
 
-    private static final Map<String, Boolean> discoverySchema = Map.of(
-            "name", true,
-            "ip", true,
-            "port", false,
-            "result", false,
-            "credential_ids", true
-    );
-
     public DiscoveryRoutes(SqlClient client)
     {
-        super(client, Constants.DISCOVERY_TABLE, Constants.DISCOVERY_MODULE, "Schema/DiscoverySchema.json");
+        super(client, Constants.DISCOVERY_TABLE, Constants.DISCOVERY_MODULE, Constants.DISCOVERY_SCEHMA);
 
         this.dbHelper = new DbQueryHelper(client);
 

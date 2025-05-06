@@ -1,23 +1,36 @@
 package org.example.constants;
 
-public final class Constants {
+public final class Constants
+{
 
     // Database Config Keys
     public static final String DB = "db";
+
     public static final String DB_HOST = "host";
+
     public static final String DB_PORT = "port";
+
     public static final String DB_DATABASE = "database";
+
     public static final String DB_USER = "user";
+
     public static final String DB_PASSWORD = "password";
+
     public static final String DB_POOL_SIZE = "poolSize";
 
     // Default Values
     public static final String DEFAULT_DB_HOST = "localhost";
+
     public static final int DEFAULT_DB_PORT = 5432;
+
     public static final String DEFAULT_DB_DATABASE = "default_db";
+
     public static final String DEFAULT_DB_USER = "postgres";
+
     public static final String DEFAULT_DB_PASSWORD = "password";
+
     public static final int DEFAULT_DB_POOL_SIZE = 5;
+
     public static final String CONFIG_FILE_PATH = "Config.json";
 
     //Jwt config
@@ -27,6 +40,7 @@ public final class Constants {
 
     //jwt Key store related constants
     public static final String KEYSTORE_PATH = "keystore.jceks";
+
     public static final String KEYSTORE_PASSWORD = "secret";
 
     // HTTP Config Keys
@@ -42,7 +56,7 @@ public final class Constants {
 
     public static final String DISCOVERY_MODULE = "discovery";
 
-    public static final String PROVISION_TABLE = "provision";
+    public static final String PROVISION_TABLE = "provisions";
 
     public static final String PROVISION_MODULE = "provision";
 
@@ -65,8 +79,6 @@ public final class Constants {
 
     public static final String CREDENTIAL_IDS = "credential_ids";
 
-    public static final String CREDENTIAL_PROFILES = "credential_profiles";
-
     public static final String CREDENTIAL_ID = "credential_id";
 
     // Event bus address
@@ -79,5 +91,29 @@ public final class Constants {
 
     public static final String FAIL = "Fail";
 
+
+    // schema path
+
+    public static final String CREDENTIAL_SCEHMA = "Schema/CredentialSchema.json";
+
+    public static final String DISCOVERY_SCEHMA = "Schema/DiscoverySchema.json";
+
+    public static final String USER_SCEHMA = "Schema/UserSchema.json";
+
+    public static final String PROVISION_SCEHMA = "Schema/ProvisionSchema.json";
+
+    //HTTP status code
+
+    public static final int HTTP_OK = 200;
+
+    public static final int HTTP_BAD_REQUEST = 400;
+
+    public static final int HTTP_UNAUTHORIZED = 401;
+
+    public static final int HTTP_FORBIDDEN = 403;
+
+    public static final int HTTP_NOT_FOUND = 404;
+
+    public static final int HTTP_INTERNAL_SERVER_ERROR = 500;
 
 }

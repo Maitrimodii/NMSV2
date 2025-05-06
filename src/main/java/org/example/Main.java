@@ -7,6 +7,7 @@ import org.example.constants.Constants;
 import org.example.db.DBConfig;
 import org.example.db.DbQueryHelper;
 import org.example.engine.DiscoveryEngine;
+import org.example.engine.PollingEngine;
 import org.example.utils.ConfigLoader;
 import org.example.utils.Jwt;
 import org.slf4j.Logger;
@@ -25,7 +26,9 @@ public class Main
                 .onSuccess(v -> logger.info("HTTP server started successfully"))
 
                 .onFailure(err -> {
+
                     logger.error("Failed to start server: {}", err.getMessage());
+
                     vertx.close();
                 });
     }
@@ -45,23 +48,25 @@ public class Main
 
                     var dbHelper = new DbQueryHelper(pgPool);
 
-                    var server = new HttpServer(pgPool, new Jwt(), config.getInteger(Constants.HTTP_PORT));
-
-                    var discoveryEngine = new DiscoveryEngine(dbHelper);
-
                     // Deploy the HttpServer verticle
-                    return vertx.deployVerticle(server)
+                    return vertx.deployVerticle(new HttpServer(pgPool, new Jwt(), config.getInteger(Constants.HTTP_PORT)))
                             .compose(httpServerId -> {
 
                                 logger.info("HttpServer verticle deployed successfully with ID: {}", httpServerId);
                                 // Deploy DiscoveryEngine verticle
 
-                                return vertx.deployVerticle(discoveryEngine)
+                                return vertx.deployVerticle(new DiscoveryEngine(dbHelper))
                                         .compose(discoveryEngineId ->
                                         {
                                             logger.info("DiscoveryEngine verticle deployed successfully with ID: {}", discoveryEngineId);
 
-                                            return Future.succeededFuture();
+                                            return vertx.deployVerticle(new PollingEngine(dbHelper))
+                                                    .compose(pollingEngineId -> {
+
+                                                        logger.info("PollingEngine verticle deployed successfully with ID: {}", pollingEngineId);
+
+                                                        return Future.succeededFuture();
+                                                    });
                                         });
                             })
 

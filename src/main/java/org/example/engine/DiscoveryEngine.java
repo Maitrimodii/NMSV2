@@ -41,25 +41,23 @@ public class DiscoveryEngine extends AbstractVerticle
     {
         var payload = message.body();
 
-        var result = new JsonObject();
-
         var discoveryId = payload.getString(Constants.DISCOVERY_ID);
 
-        // Process discovery
+        // Process discovery asynchronously
         processDiscovery(payload, discoveryId)
                 .onSuccess(discoveryResult -> {
                     LOGGER.info("Discovery process completed for id={}: {}", discoveryId, discoveryResult.encode());
                     message.reply(discoveryResult);
                 })
                 .onFailure(err -> {
-                    result.put(Constants.STATUS, Constants.FAIL);
+                    var result = new JsonObject().put(Constants.STATUS, Constants.FAIL);
                     message.reply(result);
                     LOGGER.error("Discovery failed for id={}: {}", discoveryId, err.getMessage());
                 });
     }
 
     /**
-     * Processes a discovery request
+     * Processes a discovery request asynchronously
      * @param payload Request payload with discovery parameters
      * @param discoveryId ID of the discovery operation
      * @return Future with the discovery result containing only status
@@ -77,72 +75,78 @@ public class DiscoveryEngine extends AbstractVerticle
         // Fetch credential profiles
         return fetchCredentialProfiles(credentialIds)
                 .compose(profiles -> {
+
                     if (profiles.isEmpty())
                     {
                         result.put(Constants.STATUS, Constants.FAIL);
+
                         return Future.succeededFuture(result);
                     }
 
                     // Format data according to Go plugin expectations
                     var goPluginInput = createGoPluginInput(ip, port, profiles);
 
-                    // Check device availability
+                    // Check device availability asynchronously
                     var checkObject = new JsonObject()
                             .put(Constants.IP, ip)
                             .put(Constants.PORT, port);
 
-                    if (!ProcessBuilderUtil.checkAvailability(checkObject))
-                    {
-                        result.put(Constants.STATUS, Constants.FAIL);
-                        return Future.succeededFuture(result);
-                    }
+                    return ProcessBuilderUtil.checkAvailability(vertx, checkObject)
+                            .compose(isAvailable -> {
 
-                    // Spawn plugin engine with correctly formatted input
-                    var pluginInput = new JsonArray().add(goPluginInput);
+                                if (!isAvailable)
+                                {
+                                    result.put(Constants.STATUS, Constants.FAIL);
 
-                    LOGGER.info("Plugin input: {}", pluginInput.encode());
+                                    return Future.succeededFuture(result);
+                                }
 
-                    var pluginResult = ProcessBuilderUtil.spawnPluginEngine(pluginInput);
+                                // Spawn plugin engine with correctly formatted input
+                                var pluginInput = new JsonArray().add(goPluginInput);
 
+                                LOGGER.info("Plugin input: {}", pluginInput.encode());
 
-                    if (pluginResult == null)
-                    {
-                        result.put(Constants.STATUS, Constants.FAIL);
+                                return ProcessBuilderUtil.spawnPluginEngine(vertx, pluginInput)
+                                        .compose(pluginResult -> {
 
-                        return Future.succeededFuture(result);
-                    }
+                                            if (pluginResult == null)
+                                            {
+                                                result.put(Constants.STATUS, Constants.FAIL);
 
+                                                return Future.succeededFuture(result);
+                                            }
 
+                                            // Determine final status
+                                            if (pluginResult.equals("Success"))
+                                            {
+                                                result.put(Constants.STATUS, Constants.SUCCESS);
+                                            }
+                                            else
+                                            {
+                                                result.put(Constants.STATUS, Constants.FAIL);
+                                            }
 
-                    if (pluginResult.equals("Success"))
-                    {
-                            // Otherwise just return success
-                            result.put(Constants.STATUS, Constants.SUCCESS);
-                    }
-
-                    else
-                    {
-                        result.put(Constants.STATUS, Constants.FAIL);
-                    }
-                    return Future.succeededFuture(result)
+                                            return Future.succeededFuture(result);
+                                        });
+                            })
                             .compose(res -> {
-                                String finalStatus = res.getString(Constants.STATUS).equals("Success") ? "up" : "down";
-
-//                                LOGGER.info(String.valueOf(res));
+                                var  finalStatus = res.getString(Constants.STATUS).equals("Success") ? "up" : "down";
 
                                 var updateFields = new JsonObject().put(Constants.STATUS, finalStatus);
 
                                 var id = Integer.parseInt(discoveryId);
 
-                                dbHelper.update(Constants.DISCOVERY_TABLE, Constants.FIELD_ID, id, updateFields)
-                                        .onSuccess(updateResult -> {
+                                // Update database with discovery status
+                                return dbHelper.update(Constants.DISCOVERY_TABLE, Constants.FIELD_ID, id, updateFields)
+                                        .map(updateResult -> {
                                             LOGGER.info("Discovery status updated successfully for id={}", discoveryId);
+                                            return res;
                                         })
-                                        .onFailure(err -> {
-                                            LOGGER.error("Failed to update discovery status for id={}: {}", discoveryId, err.getMessage());
-                                        });;
 
-                                return Future.succeededFuture(res);
+                                        .otherwise(err -> {
+                                            LOGGER.error("Failed to update discovery status for id={}: {}", discoveryId, err.getMessage());
+                                            return res;
+                                        });
                             });
                 });
     }
@@ -177,6 +181,7 @@ public class DiscoveryEngine extends AbstractVerticle
                 catch (Exception e)
                 {
                     LOGGER.warn("Skipping credential ID {} due to invalid attributes JSON: {}",
+
                             credential.getInteger("id", i), e.getMessage());
                     continue;
                 }
@@ -218,31 +223,37 @@ public class DiscoveryEngine extends AbstractVerticle
 
         for (var i = 0; i < credentialIds.size(); i++)
         {
+
             var idObj = credentialIds.getValue(i);
 
             if (!(idObj instanceof Integer credentialId))
             {
                 LOGGER.warn("Invalid credential ID format at index {}: {}", i, idObj);
+
                 continue;
             }
 
             future = future.compose(res ->
                     dbHelper.fetchOne(Constants.CREDENTIAL_TABLE, Constants.FIELD_ID, credentialId)
                             .map(credential -> {
-                                if (credential != null) {
+
+                                if (credential != null)
+                                {
                                     // Store original credential ID for later reference
+
                                     credential.put(Constants.CREDENTIAL_ID, credentialId);
+
                                     res.add(credential);
                                 }
                                 else
                                 {
                                     LOGGER.warn("Credential not found with ID: {}", credentialId);
                                 }
+
                                 return res;
                             })
             );
         }
         return future;
     }
-
 }

@@ -1,6 +1,8 @@
 package org.example.engine;
 
 import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Future;
+import io.vertx.core.Promise;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import org.example.constants.Constants;
@@ -9,116 +11,202 @@ import org.example.utils.ProcessBuilderUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class PollingVerticle extends AbstractVerticle {
-    private static final Logger logger = LoggerFactory.getLogger(PollingVerticle.class);
-    private final DbQueryHelper dbHelper;
-    private long pollingTimerId = -1;
-    private static final int POLLING_INTERVAL_MS = 60000; // 60 seconds
+import java.util.List;
 
-    public PollingVerticle(DbQueryHelper dbHelper) {
+public class PollingEngine extends AbstractVerticle
+{
+    private static final Logger LOGGER = LoggerFactory.getLogger(PollingEngine.class);
+
+    private static final long POLLING_INTERVAL_MS = 10_000; // 10 seconds
+
+    private final DbQueryHelper dbHelper;
+
+    public PollingEngine(DbQueryHelper dbHelper)
+    {
         this.dbHelper = dbHelper;
     }
 
-    @Override
-    public void start() {
-        vertx.eventBus().consumer(Constants.POLLING_ADDRESS, message -> {
-            JsonObject payload = (JsonObject) message.body();
-            String action = payload.getString("action");
-            if ("start".equalsIgnoreCase(action) && pollingTimerId == -1) {
-                startPolling();
-                message.reply(new JsonObject().put("status", "Polling started"));
-            } else {
-                message.reply(new JsonObject().put("status", "Polling already running or invalid action"));
+    public void start(Promise<Void> promise)
+    {
+        vertx.setPeriodic(POLLING_INTERVAL_MS, id -> pollDevices());
+
+        LOGGER.info("PollingEngine started with interval {}ms", POLLING_INTERVAL_MS);
+
+        promise.complete();
+    }
+
+    private void pollDevices()
+    {
+        LOGGER.debug("Starting device polling cycle");
+
+        dbHelper.fetchAll(Constants.PROVISION_TABLE)
+                .onSuccess(devices -> {
+                    if (devices == null || devices.isEmpty())
+                    {
+
+                        LOGGER.debug("No provisioned devices found");
+
+                        return;
+                    }
+                    processDevices(devices)
+                            .onFailure(err -> LOGGER.error("Failed to process devices: {}", err.getMessage()));
+                })
+                .onFailure(err -> LOGGER.error("Failed to fetch provisions: {}", err.getMessage()));
+    }
+
+    private Future<Void> processDevices(List<JsonObject> devices)
+    {
+        LOGGER.info("Processing {} provisioned devices", devices.size());
+
+        var future = Future.<Void>succeededFuture();
+
+        for (var device : devices)
+        {
+            future = future.compose(v -> collectDeviceMetrics(device));
+        }
+        return future;
+    }
+
+    private Future<Void> collectDeviceMetrics(JsonObject device)
+    {
+        var ip = device.getString(Constants.IP);
+
+        var port = device.getInteger(Constants.PORT, 22);
+
+        var credentialIdsStr = device.getString(Constants.CREDENTIAL_IDS);
+
+        JsonArray credentialIds;
+        try
+        {
+            credentialIds = new JsonArray(credentialIdsStr);
+        }
+        catch (Exception exception)
+        {
+            LOGGER.warn("Invalid credential_ids format for device IP: {}: {}", ip, credentialIdsStr);
+
+            return Future.succeededFuture();
+        }
+
+        LOGGER.debug("Checking availability for device IP: {}, Port: {}", ip, port);
+
+        var profile = new JsonObject()
+                .put(Constants.IP, ip)
+                .put(Constants.PORT, port);
+
+        return ProcessBuilderUtil.checkAvailability(vertx, profile)
+                .compose(isAvailable -> {
+                    if (!isAvailable)
+                    {
+                        LOGGER.warn("Device not available at IP: {}, Port: {}", ip, port);
+
+                        return Future.succeededFuture();
+                    }
+
+                    LOGGER.debug("Device available, collecting metrics for IP: {}", ip);
+                    return fetchCredentialProfiles(credentialIds)
+                            .compose(profiles -> {
+                                if (profiles.isEmpty())
+                                {
+
+                                    LOGGER.warn("No valid credentials for device IP: {}", ip);
+
+                                    return Future.succeededFuture();
+                                }
+
+                                var goPluginInput = createGoPluginInput(ip, port, profiles);
+
+                                var pluginInput = new JsonArray().add(goPluginInput);
+
+                                return ProcessBuilderUtil.spawnPluginEngine(vertx, pluginInput)
+                                        .compose(pluginResult -> {
+                                            if (pluginResult == null || !pluginResult.equalsIgnoreCase("Success")) {
+                                                LOGGER.warn("Failed to collect metrics for device IP: {}", ip);
+                                                return Future.succeededFuture();
+                                            }
+
+                                            LOGGER.info("Successfully collected metrics for device IP: {}", ip);
+                                            return Future.succeededFuture();
+                                        });
+                            });
+                });
+    }
+
+    private Future<JsonArray> fetchCredentialProfiles(JsonArray credentialIds)
+    {
+        var profiles = new JsonArray();
+
+        var future = Future.succeededFuture(profiles);
+
+        for (var i = 0; i < credentialIds.size(); i++)
+        {
+            var idObj = credentialIds.getValue(i);
+
+            if (!(idObj instanceof Integer credentialId))
+            {
+                LOGGER.warn("Invalid credential ID format at index {}: {}", i, idObj);
+                continue;
             }
-        });
 
-        logger.info("PollingVerticle started, listening on {}", Constants.POLLING_ADDRESS);
-    }
+            future = future.compose(res ->
+                    dbHelper.fetchOne(Constants.CREDENTIAL_TABLE, Constants.FIELD_ID, credentialId)
+                            .map(credential -> {
+                                if (credential != null)
+                                {
+                                    credential.put(Constants.CREDENTIAL_ID, credentialId);
 
-    private void startPolling() {
-        pollingTimerId = vertx.setPeriodic(POLLING_INTERVAL_MS, id -> {
-            logger.info("Running scheduled polling task студентов
-
-                    dbHelper.fetchAll(Constants.PROVISION_TABLE)
-                            .onSuccess(rows -> {
-                                if (rows.isEmpty()) {
-                                    logger.info("No provisioned devices found for polling");
-                                    return;
+                                    res.add(credential);
                                 }
-
-                                for (Object rowObj : rows) {
-                                    JsonObject row = (JsonObject) rowObj;
-                                    Integer provisionId = row.getInteger("id");
-                                    String ip = row.getString("ip");
-                                    Integer port = row.getInteger("port", 22);
-                                    Integer credentialId = row.getInteger("credential_profile_id");
-
-                                    // Create plugin input
-                                    JsonObject pluginInput = createPluginInput(ip, port, credentialId);
-                                    JsonArray pluginInputArray = new JsonArray().add(pluginInput);
-
-                                    // Call Go plugin
-                                    ProcessBuilderUtil.spawnPluginEngine(vertx, pluginInputArray)
-                                            .onSuccess(pluginResult -> {
-                                                if (pluginResult == null || !"Success".equalsIgnoreCase(pluginResult)) {
-                                                    logger.warn("Plugin failed for device ID {}: {}", provisionId, pluginResult);
-                                                    return;
-                                                }
-
-                                                // Store metrics in polling table
-                                                JsonObject metrics = new JsonObject()
-                                                        .put("status", pluginResult)
-                                                        .put("timestamp", System.currentTimeMillis());
-                                                JsonObject pollingEntry = new JsonObject()
-                                                        .put("provision_id", provisionId)
-                                                        .put("timestamp", System.currentTimeMillis())
-                                                        .put("metrics", metrics);
-
-                                                dbHelper.insert("polling", pollingEntry)
-                                                        .onSuccess(res -> logger.info("Polling result stored for device ID: {}", provisionId))
-                                                        .onFailure(err -> logger.error("Failed to store polling result for device ID {}: {}", provisionId, err.getMessage()));
-
-                                                // Update availability in provision table
-                                                double availabilityPercent = row.getDouble("availability_percent", 0.0);
-                                                JsonArray pollingResults = row.getJsonArray("polling_results", new JsonArray());
-                                                pollingResults.add(metrics);
-                                                double newAvailability = calculateAvailability(availabilityPercent, true);
-
-                                                JsonObject update = new JsonObject()
-                                                        .put("availability_percent", newAvailability)
-                                                        .put("polling_results", pollingResults);
-
-                                                dbHelper.update(Constants.PROVISION_TABLE, "id", provisionId, update)
-                                                        .onFailure(err -> logger.error("Failed to update device {}: {}", provisionId, err.getMessage()));
-                                            })
-                                            .onFailure(err -> logger.error("Plugin execution failed for device ID {}: {}", provisionId, err.getMessage()));
+                                else
+                                {
+                                    LOGGER.warn("Credential not found with ID: {}", credentialId);
                                 }
+                                return res;
                             })
-                            .onFailure(err -> logger.error("Failed to fetch provisioned devices: {}", err.getMessage()));
-        });
-
-        logger.info("Polling started with interval {}ms", POLLING_INTERVAL_MS);
+            );
+        }
+        return future;
     }
 
-    private JsonObject createPluginInput(String ip, Integer port, Integer credentialId) {
-        JsonObject credential = new JsonObject()
-                .put("credential.name", "credential_" + credentialId)
-                .put("credential.type", "ssh")
-                .put("attributes", new JsonObject());
+    private JsonObject createGoPluginInput(String ip, Integer port, JsonArray credentialProfiles)
+    {
+        var formattedCredentials = new JsonArray();
 
-        JsonArray credentials = new JsonArray().add(credential);
-        JsonObject context = new JsonObject()
+        for (var i = 0; i < credentialProfiles.size(); i++)
+        {
+            var credential = credentialProfiles.getJsonObject(i);
+
+            if (credential != null)
+            {
+                var attributesStr = credential.getString("attributes");
+
+                JsonObject attributes;
+
+                try {
+                    attributes = new JsonObject(attributesStr);
+                }
+                catch (Exception exception)
+                {
+                    LOGGER.warn("Skipping credential ID {} due to invalid attributes JSON: {}",
+                            credential.getInteger("id", i), exception.getMessage());
+                    continue;
+                }
+
+                var formattedCredential = new JsonObject()
+                        .put("credential.name", credential.getString("name", "credential_" + credential.getInteger("id", i)))
+                        .put("credential.type", credential.getString("type", "ssh"))
+                        .put("attributes", attributes);
+
+                formattedCredentials.add(formattedCredential);
+            }
+        }
+
+        var context = new JsonObject()
                 .put("ip", ip)
                 .put("port", port)
-                .put("credentials", credentials);
+                .put("credentials", formattedCredentials);
 
         return new JsonObject()
-                .put("requestType", "Metrics")
+                .put("requestType", "Collect")
                 .put("contexts", new JsonArray().add(context));
-    }
-
-    private double calculateAvailability(double currentAvailability, boolean isReachable) {
-        double weight = 0.1;
-        return currentAvailability * (1 - weight) + (isReachable ? 100.0 : 0.0) * weight;
     }
 }

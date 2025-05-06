@@ -6,8 +6,10 @@ import io.vertx.ext.web.Router;
 import io.vertx.ext.web.handler.BodyHandler;
 import io.vertx.ext.web.handler.JWTAuthHandler;
 import io.vertx.sqlclient.SqlClient;
+import org.example.constants.Constants;
 import org.example.routes.CredentialRoutes;
 import org.example.routes.DiscoveryRoutes;
+import org.example.routes.ProvisionRoutes;
 import org.example.routes.UserRoutes;
 import org.example.utils.ApiResponse;
 import org.example.utils.Jwt;;
@@ -55,24 +57,30 @@ public class HttpServer extends AbstractVerticle
 
         var jwtHandler = JWTAuthHandler.create(jwt.getAuthProvider());
 
-        Router credentialRouter = Router.router(vertx);
+        var credentialRouter = Router.router(vertx);
 
 
         router.route("/api/credentials/*")
                 .handler(jwtHandler)
                 .subRouter(new CredentialRoutes(sqlClient).init(credentialRouter));
 
-        Router discoveryRouter = Router.router(vertx);
+        var discoveryRouter = Router.router(vertx);
 
         router.route("/api/discoveries/*")
                 .handler(jwtHandler)
                 .subRouter(new DiscoveryRoutes(sqlClient).init(discoveryRouter));
 
+        var provisionRouter = Router.router(vertx);
+
+        router.route("/api/provisions/*")
+                .handler(jwtHandler)
+                .subRouter(new ProvisionRoutes(sqlClient).init(provisionRouter));
+
         // Global error handler
 
         router.route().failureHandler(ctx -> {
 
-            var statusCode = ctx.statusCode() > 0 ? ctx.statusCode() : 500;
+            var statusCode = ctx.statusCode() > 0 ? ctx.statusCode() : Constants.HTTP_INTERNAL_SERVER_ERROR;
 
             var message = ctx.failure() != null ? ctx.failure().getMessage() : "Internal Server Error";
 

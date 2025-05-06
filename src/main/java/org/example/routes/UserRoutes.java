@@ -13,7 +13,7 @@ import org.example.utils.Jwt;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
-import java.util.Map;
+
 
 public class UserRoutes extends BaseApi
 {
@@ -21,14 +21,9 @@ public class UserRoutes extends BaseApi
 
     private final Jwt jwt;
 
-    private static final Map<String, Boolean> userSchema = Map.of(
-            "username", true,
-            "password", true
-    );
-
     public UserRoutes(SqlClient client, Jwt jwt)
     {
-        super(client, Constants.USER_TABLE, Constants.USER_MODULE, "Schema/UserSchema.json");
+        super(client, Constants.USER_TABLE, Constants.USER_MODULE, Constants.USER_SCEHMA);
 
         this.dbHelper = new DbQueryHelper(client);
 
@@ -71,11 +66,11 @@ public class UserRoutes extends BaseApi
                 .put("password", hashPassword(password));
 
 
-        dbHelper.insert("users", data)
+        dbHelper.insert(Constants.USER_TABLE, data)
                 .onSuccess(v -> ApiResponse.success(ctx, null, "User registered successfully", 201))
                 .onFailure(err ->
                 {
-                    ApiResponse.error(ctx, err.getMessage(), 400);
+                    ApiResponse.error(ctx, err.getMessage(), Constants.HTTP_BAD_REQUEST);
                 });
     }
 
@@ -187,7 +182,7 @@ public class UserRoutes extends BaseApi
 
         router.post("/login").handler(this::login);
 
-        router.post("/referesh").handler(this::refresh);
+        router.post("/refresh").handler(this::refresh);
 
         return router;
     }

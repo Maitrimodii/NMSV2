@@ -21,7 +21,25 @@ CREATE TABLE IF NOT EXISTS discoveries (
     ip VARCHAR(45) NOT NULL,
     port INTEGER DEFAULT 22,
     credential_ids JSONB NOT NULL,
-    status VARCHAR(10),
+    status VARCHAR(10) DEFAULT 'pending',
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS provisions (
+    id SERIAL PRIMARY KEY,
+    ip VARCHAR(45) NOT NULL,
+    port INTEGER DEFAULT 22,
+    credential_ids JSONB NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE polling (
+    polling_id   SERIAL PRIMARY KEY,
+    provision_id INT NOT NULL,
+    data         JSONB NOT NULL,
+    timestamp    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (provision_id) REFERENCES provision(id) ON DELETE CASCADE
+);
+
