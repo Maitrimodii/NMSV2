@@ -52,29 +52,23 @@ public class HttpServer extends AbstractVerticle
         // Global handler for request body parsing
         router.route().handler(BodyHandler.create());
 
-        router.route("/api/users/*")
-                .subRouter(new UserRoutes(sqlClient,jwt).init(router));
+        router.route("/api/users/*").subRouter(new UserRoutes(sqlClient,jwt).init(router));
 
         var jwtHandler = JWTAuthHandler.create(jwt.getAuthProvider());
-
-        var credentialRouter = Router.router(vertx);
 
 
         router.route("/api/credentials/*")
                 .handler(jwtHandler)
-                .subRouter(new CredentialRoutes(sqlClient).init(credentialRouter));
+                .subRouter(new CredentialRoutes(sqlClient).init(Router.router(vertx)));
 
-        var discoveryRouter = Router.router(vertx);
 
         router.route("/api/discoveries/*")
                 .handler(jwtHandler)
-                .subRouter(new DiscoveryRoutes(sqlClient).init(discoveryRouter));
-
-        var provisionRouter = Router.router(vertx);
+                .subRouter(new DiscoveryRoutes(sqlClient).init(Router.router(vertx)));
 
         router.route("/api/provisions/*")
                 .handler(jwtHandler)
-                .subRouter(new ProvisionRoutes(sqlClient).init(provisionRouter));
+                .subRouter(new ProvisionRoutes(sqlClient).init(Router.router(vertx)));
 
         // Global error handler
 

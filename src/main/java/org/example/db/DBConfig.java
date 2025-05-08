@@ -1,25 +1,27 @@
 package org.example.db;
 
+import io.vertx.core.Future;
+import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonObject;
 import io.vertx.pgclient.PgBuilder;
 import io.vertx.pgclient.PgConnectOptions;
 import io.vertx.sqlclient.PoolOptions;
-import io.vertx.core.Vertx;
 import io.vertx.sqlclient.SqlClient;
 import org.example.constants.Constants;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-public class DBConfig
-{
+public class DBConfig {
+    private static final Logger logger = LoggerFactory.getLogger(DBConfig.class);
 
     /**
      * Creates a PostgreSQL connection pool using the given Vertx instance and configuration.
      *
      * @param vertx  The Vert.x instance.
      * @param config The configuration JsonObject containing database connection details.
-     * @return The configured SqlClient (connection pool).
+     * @return A Future containing the configured SqlClient (connection pool).
      */
-
-    public static SqlClient createPgPool(Vertx vertx, JsonObject config)
+    public static Future<SqlClient> createPgPool(Vertx vertx, JsonObject config)
     {
         var dbConfig = config.getJsonObject(Constants.DB);
 
@@ -27,53 +29,88 @@ public class DBConfig
                 .setPort(dbConfig.getInteger(Constants.DB_PORT, Constants.DEFAULT_DB_PORT))
                 .setHost(dbConfig.getString(Constants.DB_HOST, Constants.DEFAULT_DB_HOST))
                 .setDatabase(dbConfig.getString(Constants.DB_DATABASE, Constants.DEFAULT_DB_DATABASE))
-                .setUser( dbConfig.getString(Constants.DB_USER, Constants.DEFAULT_DB_USER))
+                .setUser(dbConfig.getString(Constants.DB_USER, Constants.DEFAULT_DB_USER))
                 .setPassword(dbConfig.getString(Constants.DB_PASSWORD, Constants.DEFAULT_DB_PASSWORD));
 
         var poolOptions = new PoolOptions()
                 .setMaxSize(dbConfig.getInteger(Constants.DB_POOL_SIZE, Constants.DEFAULT_DB_POOL_SIZE));
 
-        var client =  PgBuilder
+        var client = PgBuilder
                 .client()
                 .with(poolOptions)
                 .connectingTo(connectOptions)
                 .using(vertx)
                 .build();
 
-        initializeSchema(client);
+        // Test the connection
+        return client.query("SELECT 1").execute()
+                .compose(result -> initializeSchema(vertx, client))
+                .map(client)
+                .recover(err -> {
 
-        return client;
+                    logger.error("Failed to connect to database", err);
+
+                    client.close();
+
+                    return Future.failedFuture("Failed to connect to database: " + err.getMessage());
+                });
     }
 
-    private static void initializeSchema(SqlClient client)
+    /**
+     * Initializes the schema by executing the SQL queries from the schema file.
+     *
+     * @param vertx  The Vert.x instance.
+     * @param client The SqlClient (database connection pool).
+     * @return A Future that completes when the schema is initialized.
+     */
+    private static Future<Void> initializeSchema(Vertx vertx, SqlClient client)
     {
+        return vertx.fileSystem().readFile(Constants.SCHEMA)
+                .compose(buffer -> {
 
-        try (var inputStream = DBConfig.class.getClassLoader().getResourceAsStream(Constants.SCHEMA))
+                    var schemaSql = buffer.toString();
+
+                    var queries = schemaSql.split(";(\\s*\\n|\\s*$)");
+
+                    return executeQueries(client, queries, 0);
+                })
+                .recover(err -> {
+
+                    logger.error("Failed to load schema.sql", err);
+
+                    return Future.failedFuture("Failed to load schema.sql: " + err.getMessage());
+                });
+    }
+
+    /**
+     * Executes schema queries sequentially.
+     *
+     * @param client The SqlClient.
+     * @param queries The array of SQL queries.
+     * @param index The current query index.
+     * @return A Future that completes when all queries are executed.
+     */
+    private static Future<Void> executeQueries(SqlClient client, String[] queries, int index)
+    {
+        if (index >= queries.length)
         {
-            if (inputStream == null)
-            {
-                throw new RuntimeException("schema.sql not found");
-            }
+            return Future.succeededFuture();
+        }
 
-            var schemaSql = new String(inputStream.readAllBytes());
+        var query = queries[index].trim();
 
-            var queries = schemaSql.split(";(\\s*\\n|\\s*$)");
+        if (query.isEmpty())
+        {
+            return executeQueries(client, queries, index + 1);
+        }
 
-            for (var query : queries)
-            {
-                var trimmed = query.trim();
-
-                if (!trimmed.isEmpty())
+        return client.query(query).execute()
+                .compose(result -> executeQueries(client, queries, index + 1))
+                .recover(err ->
                 {
-                    client.query(trimmed).execute()
-                            .onFailure(err -> System.err.println("Schema init failed: " + err.getMessage()));
-                }
-            }
-        }
-        catch (Exception exception)
-        {
-            System.err.println("Failed to load schema.sql: " + exception.getMessage());
-            throw new RuntimeException(exception);
-        }
+                    logger.error("Schema init failed for query: {}", query, err);
+
+                    return Future.failedFuture(err);
+                });
     }
 }

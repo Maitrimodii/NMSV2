@@ -49,13 +49,14 @@ public class DbQueryHelper
                 .mapToObj(i -> "$" + i)
                 .collect(Collectors.joining(", "));
 
+
         var query = String.format(Constants.SQL_INSERT, table, columns, placeholders);
 
         var values = Tuple.tuple();
 
         for (var field : fieldNames)
         {
-            Object value = data.getValue(field);
+            var value = data.getValue(field);
 
             if (value instanceof JsonArray || value instanceof JsonObject)
             {
@@ -66,6 +67,8 @@ public class DbQueryHelper
                 values.addValue(value);
             }
         }
+
+        logger.info("Executing insert query");
 
         return client
                 .preparedQuery(query)
@@ -84,6 +87,7 @@ public class DbQueryHelper
      */
     public Future<Void> update(String table, String idColumn, Object idValue, JsonObject data)
     {
+
         var fieldNames = data.stream().map(Map.Entry::getKey).toList();
 
         var setClause = IntStream.rangeClosed(1, fieldNames.size())
@@ -100,6 +104,8 @@ public class DbQueryHelper
         }
 
         values.addValue(idValue);
+
+        logger.info("Executing update query");
 
         return client
                 .preparedQuery(query)
@@ -147,7 +153,9 @@ public class DbQueryHelper
                 .map(rows ->
                 {
                     var row = rows.iterator().next();
+
                     logger.info(String.valueOf(row));
+
                     return row.toJson();
                 });
     }
@@ -170,6 +178,7 @@ public class DbQueryHelper
                 .map(rows ->
                 {
                     var result = new ArrayList<JsonObject>();
+
                     for (var row : rows)
                     {
                         result.add(row.toJson());

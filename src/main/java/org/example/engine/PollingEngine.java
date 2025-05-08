@@ -14,13 +14,17 @@ import org.slf4j.LoggerFactory;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class PollingEngine extends AbstractVerticle
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(PollingEngine.class);
 
     private static final long POLLING_INTERVAL_MS = 10_000;
+
+    private final Map<Integer, Long> lastPollTimeMap = new HashMap<>();
 
     private final DbQueryHelper dbHelper;
 
@@ -40,7 +44,7 @@ public class PollingEngine extends AbstractVerticle
     }
 
     /**
-     * Polls devices from the database and processes them
+     * Polls devices from the database and processes them if they're due for polling
      */
     private void pollDevices()
     {
@@ -53,10 +57,65 @@ public class PollingEngine extends AbstractVerticle
                         LOGGER.debug("No provisioned devices found");
                         return;
                     }
-                    processDevices(devices)
+
+                    // Filter devices that are due for polling
+                    var devicesToProcess = filterDevicesForPolling(devices);
+
+                    if (devicesToProcess.isEmpty()) {
+                        LOGGER.debug("No devices due for polling in this cycle");
+                        return;
+                    }
+
+                    LOGGER.info("Processing {} devices that are due for polling", devicesToProcess.size());
+
+                    processDevices(devicesToProcess)
+                            .onSuccess(v -> {
+                                // Update last poll time for processed devices
+                                var currentTime = System.currentTimeMillis();
+
+                                for (var device : devicesToProcess)
+                                {
+                                    var provisionId = device.getInteger(Constants.FIELD_ID);
+
+                                    if (provisionId != null)
+                                    {
+                                        lastPollTimeMap.put(provisionId, currentTime);
+                                    }
+
+                                }
+                                LOGGER.debug("Updated last poll timestamps for {} devices", devicesToProcess.size());
+                            })
                             .onFailure(err -> LOGGER.error("Failed to process devices: {}", err.getMessage()));
                 })
                 .onFailure(err -> LOGGER.error("Failed to fetch provisions: {}", err.getMessage()));
+    }
+
+    /**
+     * Filter devices that are due for polling based on their last poll time
+     *
+     * @param allDevices List of all provisioned devices
+     * @return List of devices that should be polled in this cycle
+     */
+    private List<JsonObject> filterDevicesForPolling(List<JsonObject> allDevices)
+    {
+        var currentTime = System.currentTimeMillis();
+
+        return allDevices.stream()
+                .filter(device -> {
+                    var provisionId = device.getInteger(Constants.FIELD_ID);
+
+                    if (provisionId == null)
+                    {
+                        return false;
+                    }
+
+                    // Get last poll time, default to 0 if never polled
+                    var lastPollTime = lastPollTimeMap.getOrDefault(provisionId, 0L);
+
+                    // Check if enough time has passed since last poll
+                    return (currentTime - lastPollTime >= POLLING_INTERVAL_MS);
+                })
+                .toList();
     }
 
     /**
@@ -98,6 +157,7 @@ public class PollingEngine extends AbstractVerticle
 
             return ProcessBuilderUtil.spawnPluginEngine(vertx, pluginInput)
                     .compose(resultArray -> {
+
                         if (resultArray == null || resultArray.isEmpty())
                         {
                             LOGGER.warn("Failed to collect metrics for devices");
@@ -133,11 +193,13 @@ public class PollingEngine extends AbstractVerticle
         for (var i = 0; i < resultArray.size(); i++)
         {
             var result = resultArray.getJsonObject(i);
-            if (result == null) {
+            if (result == null)
+            {
                 continue;
             }
 
             var status = result.getString(Constants.STATUS, "");
+
             if (!Constants.SUCCESS.equalsIgnoreCase(status))
             {
                 LOGGER.warn("Result has non-success status: {}", status);
@@ -145,6 +207,7 @@ public class PollingEngine extends AbstractVerticle
             }
 
             var provisionId = result.getInteger(Constants.PROVISION_ID);
+
             if (provisionId == null)
             {
                 LOGGER.warn("Result missing provision ID, skipping metrics storage");
@@ -160,9 +223,9 @@ public class PollingEngine extends AbstractVerticle
                 continue;
             }
 
-            // Chain this operation to our future chain
-            final Integer finalProvisionId = provisionId;
-            final JsonObject finalMetrics = metrics;
+            final var finalProvisionId = provisionId;
+
+            final var finalMetrics = metrics;
 
             resultFuture = resultFuture.compose(v ->
                     storeMetricsInDatabase(new JsonObject()
@@ -282,8 +345,8 @@ public class PollingEngine extends AbstractVerticle
 
     /**
      * Formats the credentials into a JSON array
-     * @param credentialProfiles
-     * @return
+     * @param credentialProfiles The array of credential profiles
+     * @return Formatted JSON array of credentials
      */
     private JsonArray formatCredentials(JsonArray credentialProfiles)
     {
@@ -325,8 +388,8 @@ public class PollingEngine extends AbstractVerticle
 
     /**
      * Creates the input for the Go plugin
-     * @param contexts
-     * @return
+     * @param contexts The array of contexts for the devices
+     * @return JsonObject representing the input for the Go plugin
      */
     private JsonObject createGoPluginInput(JsonArray contexts)
     {
@@ -346,7 +409,7 @@ public class PollingEngine extends AbstractVerticle
         if (result == null || !result.containsKey(Constants.STATUS) ||
                 !result.getString(Constants.STATUS).equalsIgnoreCase(Constants.SUCCESS))
         {
-            return Future.succeededFuture();
+            return Future.failedFuture("result are not present");
         }
 
         // Extract provision ID from the result
@@ -355,7 +418,8 @@ public class PollingEngine extends AbstractVerticle
         if (provisionId == -1)
         {
             LOGGER.warn("Missing provision ID in result, cannot store metrics");
-            return Future.succeededFuture();
+
+            return Future.failedFuture("Missing provision ID in result, cannot store metrics");
         }
 
         // Extract the data (metrics) from the result
@@ -386,4 +450,6 @@ public class PollingEngine extends AbstractVerticle
                 .onFailure(err -> LOGGER.error("Failed to store metrics: {}", err.getMessage()))
                 .mapEmpty();
     }
+
+
 }

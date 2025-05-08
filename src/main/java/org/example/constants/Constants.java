@@ -29,7 +29,7 @@ public final class Constants
 
     public static final String DEFAULT_DB_PASSWORD = "password";
 
-    public static final int DEFAULT_DB_POOL_SIZE = 5;
+    public static final int DEFAULT_DB_POOL_SIZE = 10;
 
     public static final String CONFIG_FILE_PATH = "Config.json";
 
@@ -43,6 +43,7 @@ public final class Constants
 
     public static final String KEYSTORE_PASSWORD = "secret";
 
+    public static final String ALGORITHM = "SHA-256";
     // HTTP Config Keys
 
     public static final String HTTP_PORT = "http.port";
@@ -73,7 +74,7 @@ public final class Constants
 
     public static final String DISCOVERY = "Discovery";
 
-    public static final String CREDENTIALS = "Credentials";
+    public static final String CREDENTIALS = "credentials";
 
     public static final String DISCOVERY_ID = "discovery_id";
 
@@ -150,7 +151,7 @@ public final class Constants
 
     public static final String RESULT = "result";
 
-    public static final String COLLECT = "collect";
+    public static final String COLLECT = "Collect";
 
     public static final String DATA = "data";
 

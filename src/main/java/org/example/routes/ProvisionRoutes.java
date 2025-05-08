@@ -74,6 +74,7 @@ public class ProvisionRoutes extends BaseApi
                 })
                 .onFailure(err -> {
                     logger.error("Provision verification failed: {}", err.getMessage());
+
                     ApiResponse.error(ctx, err.getMessage(), Constants.HTTP_BAD_REQUEST);
                 });
     }
@@ -89,7 +90,9 @@ public class ProvisionRoutes extends BaseApi
         // First check if discovery exists and is not in pending status
         return dbHelper.fetchOne(Constants.DISCOVERY_TABLE, Constants.FIELD_ID, discoveryId)
                 .compose(discovery -> {
-                    if (discovery == null) {
+
+                    if (discovery == null)
+                    {
                         return Future.failedFuture("Discovery ID not found");
                     }
 
@@ -113,9 +116,9 @@ public class ProvisionRoutes extends BaseApi
                         try {
                             credentialIds = new JsonArray(credentialIdsStr);
                         }
-                        catch (Exception e)
+                        catch (Exception exception)
                         {
-                            logger.error("Failed to parse credential IDs: {}", e.getMessage());
+                            logger.error("Failed to parse credential IDs: {}", exception.getMessage());
                             return Future.failedFuture("Invalid credential IDs format");
                         }
                     }

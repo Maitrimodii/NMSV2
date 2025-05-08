@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS provisions (
 
 CREATE TABLE IF NOT EXISTS polling (
     polling_id   SERIAL PRIMARY KEY,
-    provision_id INT NOT NULL,
+    provisionId INT NOT NULL,
     data         JSONB NOT NULL,
     timestamp    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

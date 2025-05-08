@@ -6,7 +6,7 @@
     "database": "nms",
     "user": "maitri",
     "password": "Maitri@12",
-    "poolSize": 5
+    "poolSize": 6
   },
 
   "http.port": 8080

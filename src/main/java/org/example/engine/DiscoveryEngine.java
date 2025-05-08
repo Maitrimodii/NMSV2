@@ -43,15 +43,18 @@ public class DiscoveryEngine extends AbstractVerticle
 
         var discoveryId = payload.getString(Constants.DISCOVERY_ID);
 
-        // Process discovery asynchronously
         processDiscovery(payload, discoveryId)
                 .onSuccess(discoveryResult -> {
+
                     LOGGER.info("Discovery process completed for id={}: {}", discoveryId, discoveryResult.encode());
+
                     message.reply(discoveryResult);
                 })
                 .onFailure(err -> {
                     var result = new JsonObject().put(Constants.STATUS, Constants.FAIL);
+
                     message.reply(result);
+
                     LOGGER.error("Discovery failed for id={}: {}", discoveryId, err.getMessage());
                 });
     }
@@ -116,6 +119,7 @@ public class DiscoveryEngine extends AbstractVerticle
 
                                             // For discovery, extract the status from the first result object
                                             var firstResult = resultArray.getJsonObject(0);
+
                                             if (firstResult != null && Constants.SUCCESS.equalsIgnoreCase(firstResult.getString(Constants.STATUS, "")))
                                             {
                                                 result.put(Constants.STATUS, Constants.SUCCESS);
@@ -176,11 +180,11 @@ public class DiscoveryEngine extends AbstractVerticle
                 {
                     attributes = new JsonObject(attributesStr);
                 }
-                catch (Exception e)
+                catch (Exception exception)
                 {
                     LOGGER.warn("Skipping credential ID {} due to invalid attributes JSON: {}",
 
-                            credential.getInteger(Constants.FIELD_ID, i), e.getMessage());
+                            credential.getInteger(Constants.FIELD_ID, i), exception.getMessage());
                     continue;
                 }
 
@@ -237,8 +241,6 @@ public class DiscoveryEngine extends AbstractVerticle
 
                                 if (credential != null)
                                 {
-                                    // Store original credential ID for later reference
-
                                     credential.put(Constants.CREDENTIAL_ID, credentialId);
 
                                     res.add(credential);

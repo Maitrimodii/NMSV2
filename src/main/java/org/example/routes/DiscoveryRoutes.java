@@ -62,7 +62,6 @@ public class DiscoveryRoutes extends BaseApi
                             .put(Constants.PORT, discovery.getInteger(Constants.PORT, 22))
                             .put(Constants.CREDENTIAL_IDS, discovery.getString(Constants.CREDENTIAL_IDS, "[]"));
 
-                    logger.info(String.valueOf(payload));
 
                     var credentialIdsStr = discovery.getString(Constants.CREDENTIAL_IDS, "[]");
 
@@ -70,13 +69,12 @@ public class DiscoveryRoutes extends BaseApi
                     {
                         var credentialIdsArray = new JsonArray(credentialIdsStr);
 
-                        logger.info(String.valueOf(credentialIdsArray));
 
                         payload.put(Constants.CREDENTIAL_IDS, credentialIdsArray);
                     }
-                    catch (Exception e)
+                    catch (Exception exception)
                     {
-                        logger.error("Failed to parse credential_ids for discovery id={}: {}", discoveryId, e.getMessage());
+                        logger.error("Failed to parse credential_ids for discovery id={}: {}", discoveryId, exception.getMessage());
 
                         return Future.failedFuture("Invalid credential_ids format");
                     }
@@ -87,7 +85,7 @@ public class DiscoveryRoutes extends BaseApi
                             .map(message -> (JsonObject) message.body());
                 })
 
-                .onSuccess(result -> ApiResponse.success(ctx, result, result.getString("error_message"), Constants.HTTP_OK))
+                .onSuccess(result -> ApiResponse.success(ctx, result,"", Constants.HTTP_OK))
 
                 .onFailure(err -> {
                     logger.error("Run discovery failed for id={}: {}", discoveryId, err.getMessage());
@@ -98,14 +96,12 @@ public class DiscoveryRoutes extends BaseApi
 
     /**
      * Initializes the routes for the discovery API.
-     * @param router
-     * @return
+     * @param router the Vert.x Router to register the routes.
+     * @return the initialized Router with discovery routes.
      */
     public Router init(Router router)
     {
         router.post("/").handler(this::create);
-
-        logger.info("inside the init method of discovery routes");
 
         router.get("/").handler(this::findAll);
 

@@ -32,22 +32,22 @@ public class UserRoutes extends BaseApi
 
     /**
      * Validates the request body for user registration and login.
-     * @param password
+     * @param password password to be hashed
      * @return String of hashed password
      */
     private String hashPassword(String password)
     {
         try
         {
-            var digest = MessageDigest.getInstance("SHA-256");
+            var digest = MessageDigest.getInstance(Constants.ALGORITHM);
 
             var hash = digest.digest(password.getBytes());
 
             return Base64.getEncoder().encodeToString(hash);
         }
-        catch (NoSuchAlgorithmException e)
+        catch (NoSuchAlgorithmException exception)
         {
-            System.err.println("SHA-256 not available: " + e.getMessage());
+            System.err.println(Constants.ALGORITHM + " not available: " + exception.getMessage());
 
             return null;
         }
@@ -58,7 +58,7 @@ public class UserRoutes extends BaseApi
     {
         var body = ctx.body().asJsonObject();
 
-        if(validate(ctx))
+        if(!validate(ctx))
         {
             return;
         }
@@ -73,7 +73,7 @@ public class UserRoutes extends BaseApi
 
 
         dbHelper.insert(Constants.USER_TABLE, data)
-                .onSuccess(v -> ApiResponse.success(ctx, null, "User registered successfully", 201))
+                .onSuccess(v -> ApiResponse.success(ctx, null, "User registered successfully", Constants.HTTP_OK))
                 .onFailure(err ->
                 {
                     ApiResponse.error(ctx, err.getMessage(), Constants.HTTP_BAD_REQUEST);
@@ -85,7 +85,7 @@ public class UserRoutes extends BaseApi
     {
         var body = ctx.body().asJsonObject();
 
-        if(validate(ctx))
+        if(!validate(ctx))
         {
             return;
         }
@@ -125,11 +125,11 @@ public class UserRoutes extends BaseApi
                     }
                 })
 
-                .onSuccess(user -> ApiResponse.success(ctx, user, "Login successful", 200))
+                .onSuccess(user -> ApiResponse.success(ctx, user, "Login successful", Constants.HTTP_OK))
 
                 .onFailure(err ->
                 {
-                    ApiResponse.error(ctx, err.getMessage(), 401);
+                    ApiResponse.error(ctx, err.getMessage(), Constants.HTTP_UNAUTHORIZED);
                 });
     }
 
@@ -139,7 +139,7 @@ public class UserRoutes extends BaseApi
 
         if (token == null || !token.startsWith("Bearer "))
         {
-            ApiResponse.error(ctx, "Missing or invalid token", 401);
+            ApiResponse.error(ctx, "Missing or invalid token", Constants.HTTP_UNAUTHORIZED);
             return;
         }
 
@@ -178,9 +178,9 @@ public class UserRoutes extends BaseApi
                     return Future.succeededFuture(response);
                 })
 
-                .onSuccess(tokens -> ApiResponse.success(ctx, tokens, "Token refreshed successfully", 200))
+                .onSuccess(tokens -> ApiResponse.success(ctx, tokens, "Token refreshed successfully", Constants.HTTP_OK))
 
-                .onFailure(err -> ApiResponse.error(ctx, err.getMessage(), 401));
+                .onFailure(err -> ApiResponse.error(ctx, err.getMessage(), Constants.HTTP_UNAUTHORIZED));
     }
 
     public Router init(Router router)

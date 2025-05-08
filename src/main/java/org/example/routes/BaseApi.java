@@ -32,7 +32,9 @@ public abstract class BaseApi
     protected BaseApi(SqlClient client, String tableName, String moduleName, String schemaPath)
     {
         this.tableName = tableName;
+
         this.moduleName = moduleName;
+
         this.dbHelper = new DbQueryHelper(client);
 
         // Load JSON schema from resources
@@ -53,6 +55,7 @@ public abstract class BaseApi
         catch (Exception exception)
         {
             logger.error("Failed to load JSON schema for {}: {}", moduleName, exception.getMessage());
+
             throw new RuntimeException("Schema initialization failed", exception);
         }
     }
@@ -70,10 +73,12 @@ public abstract class BaseApi
         if (body == null)
         {
             ApiResponse.error(ctx, "Request body cannot be null", Constants.HTTP_BAD_REQUEST);
-            return true;
+
+            return false;
         }
 
-        try {
+        try
+        {
             // Convert Vert.x JsonObject to Jackson JsonNode
             var bodyNode = mapper.readTree(body.encode());
 
@@ -92,15 +97,17 @@ public abstract class BaseApi
 
                 ApiResponse.error(ctx, errorMsg.toString(), Constants.HTTP_BAD_REQUEST);
 
-                return true;
+                return false;
             }
-            return false;
+            return true;
         }
         catch (Exception exception)
         {
             logger.error("Validation failed for {}: {}", moduleName, exception.getMessage());
+
             ApiResponse.error(ctx, "Validation error: " + exception.getMessage(), Constants.HTTP_BAD_REQUEST);
-            return true;
+
+            return false;
         }
     }
 
@@ -137,7 +144,7 @@ public abstract class BaseApi
     {
         var body = ctx.body().asJsonObject();
 
-        if (validate(ctx))
+        if (!validate(ctx))
         {
             return;
         }
@@ -202,7 +209,7 @@ public abstract class BaseApi
 
     /**
      * Fetch record with id from the specified table.
-     * @param ctx
+     * @param ctx the routing context containing the request.
      */
     protected void findOne(RoutingContext ctx)
     {

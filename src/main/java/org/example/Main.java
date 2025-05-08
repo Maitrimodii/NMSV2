@@ -13,8 +13,7 @@ import org.example.utils.Jwt;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class Main
-{
+public class Main {
 
     private static final Logger logger = LoggerFactory.getLogger(Main.class);
 
@@ -26,63 +25,63 @@ public class Main
                 .onSuccess(v -> logger.info("HTTP server started successfully"))
 
                 .onFailure(err -> {
-
                     logger.error("Failed to start server: {}", err.getMessage());
-
                     vertx.close();
                 });
     }
 
     /**
-     * Loads configuration, initializes database pool and HTTP server, and deploys the server verticle.
+     * Loads configuration, initializes database pool and HTTP server, and deploys the server, discovery, and polling verticles.
      *
      * @param vertx The Vert.x instance.
-     * @return A Future that completes when the server is successfully deployed.
+     * @return A Future that completes when the verticles are successfully deployed.
      */
-    private static Future<Object> startServer(Vertx vertx)
+    private static Future<Void> startServer(Vertx vertx)
     {
         return ConfigLoader.load(vertx)
-                .compose(config -> {
+                .compose(config -> DBConfig.createPgPool(vertx, config)
 
-                    var pgPool = DBConfig.createPgPool(vertx, config);
+                        .compose(pgPool -> {
+                            var dbHelper = new DbQueryHelper(pgPool);
 
-                    var dbHelper = new DbQueryHelper(pgPool);
+                            // Deploy the HttpServer verticle
+                            return vertx.deployVerticle(new HttpServer(pgPool, new Jwt(), config.getInteger(Constants.HTTP_PORT)))
 
-                    // Deploy the HttpServer verticle
-                    return vertx.deployVerticle(new HttpServer(pgPool, new Jwt(), config.getInteger(Constants.HTTP_PORT)))
-                            .compose(httpServerId -> {
+                                    .compose(httpServerId -> {
 
-                                logger.info("HttpServer verticle deployed successfully with ID: {}", httpServerId);
-                                // Deploy DiscoveryEngine verticle
+                                        logger.info("HttpServer verticle deployed successfully with ID: {}", httpServerId);
 
-                                return vertx.deployVerticle(new DiscoveryEngine(dbHelper))
-                                        .compose(discoveryEngineId ->
+                                        // Deploy DiscoveryEngine verticle
+                                        return vertx.deployVerticle(new DiscoveryEngine(dbHelper))
+                                                .compose(discoveryEngineId -> {
+                                                    logger.info("DiscoveryEngine verticle deployed successfully with ID: {}", discoveryEngineId);
+
+                                                    // Deploy PollingEngine verticle
+                                                    return vertx.deployVerticle(new PollingEngine(dbHelper))
+
+                                                            .compose(pollingEngineId -> {
+
+                                                                logger.info("PollingEngine verticle deployed successfully with ID: {}", pollingEngineId);
+
+                                                                return Future.succeededFuture();
+                                                            });
+                                                });
+                                    })
+                                    .onComplete(result -> {
+                                        if (result.succeeded())
                                         {
-                                            logger.info("DiscoveryEngine verticle deployed successfully with ID: {}", discoveryEngineId);
+                                            // Add shutdown hook on successful deployment
+                                            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
 
-                                            return vertx.deployVerticle(new PollingEngine(dbHelper))
-                                                    .compose(pollingEngineId -> {
+                                                logger.info("Shutting down application and closing resources");
 
-                                                        logger.info("PollingEngine verticle deployed successfully with ID: {}", pollingEngineId);
+                                                pgPool.close();
 
-                                                        return Future.succeededFuture();
-                                                    });
-                                        });
-                            })
-
-                            .onComplete(result -> {
-                                if (result.succeeded())
-                                {
-                                    // Add shutdown hook on successful deployment
-                                    Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-                                        logger.info("Shutting down application and closing resources");
-
-                                        pgPool.close();
-
-                                        vertx.close();
-                                    }));
-                                }
-                            });
-                });
+                                                vertx.close();
+                                            }));
+                                        }
+                                    });
+                        }))
+                .mapEmpty();
     }
 }

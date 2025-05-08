@@ -1,7 +1,6 @@
 package org.example.utils;
 
 import io.vertx.core.Future;
-import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
@@ -19,41 +18,37 @@ public class ProcessBuilderUtil
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(ProcessBuilderUtil.class);
 
-    private static final int PING_TIMEOUT_MS     = 2000; // 2 seconds
+    private static final int PING_TIMEOUT_MS = 2000;     // 2 seconds
 
-    private static final int SOCKET_TIMEOUT_MS   = 2000; // 2 seconds
+    private static final int SOCKET_TIMEOUT_MS = 2000;   // 2 seconds
 
     private static final int PROCESS_TIMEOUT_SEC = 30;   // 30 seconds
 
-    private static final String GO_BINARY_PATH   = "go/nms-plugin";
+    private static final String GO_BINARY_PATH = "go/nms-plugin";
 
     /**
      * Asynchronously checks device availability
      *
      * @param vertx Vertx instance to execute blocking operations
-     * @param discoveryProfile JSON profile containing device information
+     * @param profile JSON profile containing device information
      * @return Future that completes with the availability result
      */
-    public static Future<Boolean> checkAvailability(Vertx vertx, JsonObject discoveryProfile)
+    public static Future<Boolean> checkAvailability(Vertx vertx, JsonObject profile)
     {
-        // No changes needed here - this method works as expected
-        return vertx.executeBlocking(promise ->
-        {
+        return vertx.executeBlocking(promise -> {
             try
             {
-                var ip = discoveryProfile.getString(Constants.IP);
+                var ip = profile.getString(Constants.IP);
 
-                var port = discoveryProfile.getInteger(Constants.PORT, 22);
+                var port = profile.getInteger(Constants.PORT, 22);
 
-                if (ip == null || ip.isEmpty())
-                {
+                if (ip == null || ip.isEmpty()) {
                     LOGGER.error("Invalid IP address: {}", ip);
-
                     promise.complete(false);
-
                     return;
                 }
 
+                // Check ping first
                 var isPingSuccessful = pingDevice(ip);
 
                 if (!isPingSuccessful)
@@ -65,6 +60,7 @@ public class ProcessBuilderUtil
                     return;
                 }
 
+                // Check port if needed
                 if (port > 0 && !checkPort(ip, port))
                 {
                     LOGGER.warn("Port {} is not open for IP: {}", port, ip);
@@ -75,12 +71,12 @@ public class ProcessBuilderUtil
                 }
 
                 LOGGER.info("Device is available at IP: {}, Port: {}", ip, port);
+
                 promise.complete(true);
             }
             catch (Exception exception)
             {
                 LOGGER.error("Error checking availability: {}", exception.getMessage(), exception);
-
                 promise.complete(false);
             }
         });
@@ -88,14 +84,12 @@ public class ProcessBuilderUtil
 
     /**
      * Pings the device to check its availability
-     * @param ip
+     * @param ip Device IP address
      * @return true if the device is reachable, false otherwise
      */
     private static boolean pingDevice(String ip)
     {
-        // No changes needed
-        try
-        {
+        try {
             var command = new String[]{"ping", "-c", "1", "-W", String.valueOf(PING_TIMEOUT_MS / 1000), ip};
 
             var pb = new ProcessBuilder(command);
@@ -104,7 +98,7 @@ public class ProcessBuilderUtil
 
             var process = pb.start();
 
-            var completed = process.waitFor(PING_TIMEOUT_MS*2, TimeUnit.MILLISECONDS);
+            var completed = process.waitFor(PING_TIMEOUT_MS * 2, TimeUnit.MILLISECONDS);
 
             if (!completed)
             {
@@ -120,14 +114,16 @@ public class ProcessBuilderUtil
             if (exitCode != 0)
             {
                 LOGGER.error("Ping process failed for IP: {} with exit code: {}", ip, exitCode);
+
                 return false;
             }
 
             return true;
         }
-        catch (Exception e)
+        catch (Exception exception)
         {
-            LOGGER.error("Error pinging IP: {}: {}", ip, e.getMessage(), e);
+
+            LOGGER.error("Error pinging IP: {}: {}", ip, exception.getMessage(), exception);
 
             return false;
         }
@@ -135,64 +131,65 @@ public class ProcessBuilderUtil
 
     /**
      * Checks if the specified port is open on the device
-     * @param ip
-     * @param port
+     * @param ip Device IP address
+     * @param port Port number to check
      * @return true if the port is open, false otherwise
      */
     private static boolean checkPort(String ip, int port)
     {
-        try (var socket = new Socket()) {
-
+        try (var socket = new Socket())
+        {
             socket.connect(new InetSocketAddress(ip, port), SOCKET_TIMEOUT_MS);
 
             return true;
         }
-        catch (Exception e)
+        catch (Exception exception)
         {
-            LOGGER.error("Error checking port {} for IP: {}: {}", port, ip, e.getMessage());
+            LOGGER.error("Error checking port {} for IP: {}: {}", port, ip, exception.getMessage());
+
             return false;
         }
     }
 
     /**
-     * Asynchronously spawns plugin engine
+     * Asynchronously spawns plugin engine and streams results
      *
      * @param vertx Vertx instance to execute blocking operations
      * @param pluginInput JSON array with plugin input
-     * @return Future with plugin execution result as a JsonArray or null on failure
+     * @return Future with plugin execution results as a JsonArray or null on failure
      */
     public static Future<JsonArray> spawnPluginEngine(Vertx vertx, JsonArray pluginInput)
     {
-        Promise<JsonArray> promise = Promise.promise();
-
-        vertx.executeBlocking(blockingPromise ->
+        if (pluginInput == null || pluginInput.isEmpty())
         {
+            LOGGER.error("Plugin input is null or empty");
 
-            if (pluginInput == null || pluginInput.isEmpty()) {
+            return Future.succeededFuture(null);
+        }
 
-                LOGGER.error("Plugin input is null or empty");
-
-                blockingPromise.complete(null);
-
-                return;
-            }
-
+        return vertx.executeBlocking(promise -> {
             Process process = null;
-            try {
-                if (!new File(GO_BINARY_PATH).exists()) {
+
+            try
+            {
+                // Check if binary exists
+                if (!new File(GO_BINARY_PATH).exists())
+                {
                     LOGGER.error("Go binary not found at: {}", GO_BINARY_PATH);
 
-                    blockingPromise.complete(null);
+                    promise.complete(null);
 
                     return;
                 }
 
+                // Start the process
                 var pb = new ProcessBuilder(GO_BINARY_PATH);
 
                 pb.redirectErrorStream(false);
 
                 process = pb.start();
 
+                // Write input to the process
                 var inputString = pluginInput.encode();
 
                 LOGGER.info("Sending input to Go plugin: {}", inputString);
@@ -207,26 +204,45 @@ public class ProcessBuilderUtil
                     writer.flush();
                 }
 
-                var output = new StringBuilder();
+                // Create a result array to collect outputs
+                var allResults = new JsonArray();
 
+                // Process the output stream within the executeBlocking context
                 try (var reader = new BufferedReader(
                         new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
 
                     String line;
+                    while ((line = reader.readLine()) != null)
+                    {
+                        if (!line.trim().isEmpty())
+                        {
+                            try
+                            {
+                                // Parse the line as JSON
+                                var resultObj = new JsonObject(line);
 
-                    while ((line = reader.readLine()) != null) {
-                        output.append(line);
+                                allResults.add(resultObj);
+
+                                LOGGER.info("Received result from Go plugin: {}", resultObj.encode());
+                            }
+                            catch (Exception exception)
+                            {
+                                LOGGER.error("Failed to parse JSON line: {}, raw output: {}", exception.getMessage(), line);
+                            }
+                        }
                     }
                 }
 
+                // Wait for process completion with timeout
                 var completed = process.waitFor(PROCESS_TIMEOUT_SEC, TimeUnit.SECONDS);
 
-                if (!completed) {
+                if (!completed)
+                {
                     LOGGER.error("Go plugin process timed out");
 
                     process.destroyForcibly();
 
-                    blockingPromise.complete(null);
+                    promise.complete(allResults.isEmpty() ? null : allResults);
 
                     return;
                 }
@@ -237,54 +253,21 @@ public class ProcessBuilderUtil
                 {
                     LOGGER.error("Go plugin process failed with exit code: {}", exitCode);
 
-                    blockingPromise.complete(null);
+                    promise.complete(allResults.isEmpty() ? null : allResults);
 
                     return;
                 }
 
-                var outputStr = output.toString().trim();
+                LOGGER.info("Go plugin completed successfully with {} results", allResults.size());
 
-                try
-                {
-                    var resultArray = new JsonArray(outputStr);
+                promise.complete(allResults);
 
-                    LOGGER.info("Go plugin output array: {}", resultArray.encode());
-
-                    if (resultArray.isEmpty()) {
-                        LOGGER.error("Go plugin returned empty JSON array");
-
-                        blockingPromise.complete(null);
-
-                        return;
-                    }
-
-                    // Instead of extracting just the status, return the entire result array
-                    blockingPromise.complete(resultArray);
-                }
-                catch (Exception exception) {
-                    try {
-                        // Handle case where result is a single object instead of array
-                        var result = new JsonObject(outputStr);
-
-                        LOGGER.info("Go plugin output object: {}", result.encode());
-
-                        // Create an array with the single result object
-                        var resultArray = new JsonArray().add(result);
-
-                        blockingPromise.complete(resultArray);
-                    }
-                    catch (Exception exception2)
-                    {
-                        LOGGER.error("Failed to parse JSON output: {}, raw output: {}", exception.getMessage(), outputStr);
-                        blockingPromise.complete(null);
-                    }
-                }
             }
             catch (IOException exception)
             {
                 LOGGER.error("I/O error spawning Go plugin: {}", exception.getMessage(), exception);
 
-                blockingPromise.complete(null);
+                promise.complete(null);
             }
             catch (InterruptedException exception)
             {
@@ -292,7 +275,7 @@ public class ProcessBuilderUtil
 
                 Thread.currentThread().interrupt();
 
-                blockingPromise.complete(null);
+                promise.complete(null);
             }
             finally
             {
@@ -301,19 +284,8 @@ public class ProcessBuilderUtil
                     process.destroyForcibly();
                 }
             }
-        }).onComplete(ar -> {
-            if (ar.succeeded())
-            {
-                promise.complete((JsonArray) ar.result());
-            }
-            else
-            {
-                LOGGER.error("Error executing Go plugin: {}", ar.cause().getMessage(), ar.cause());
-
-                promise.complete(null);
-            }
         });
-
-        return promise.future();
     }
+
+
 }
