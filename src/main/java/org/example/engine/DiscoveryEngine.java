@@ -8,6 +8,7 @@ import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import org.example.constants.Constants;
 import org.example.db.DbQueryHelper;
+import org.example.utils.CredentialProfiles;
 import org.example.utils.ProcessBuilderUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,9 +19,13 @@ public class DiscoveryEngine extends AbstractVerticle
 
     private final DbQueryHelper dbHelper;
 
+    private final CredentialProfiles credentialProfiles;
+
     public DiscoveryEngine(DbQueryHelper dbHelper)
     {
         this.dbHelper = dbHelper;
+
+        this.credentialProfiles = new CredentialProfiles(dbHelper);
     }
 
     @Override
@@ -76,7 +81,7 @@ public class DiscoveryEngine extends AbstractVerticle
         var credentialIds = payload.getJsonArray(Constants.CREDENTIAL_IDS);
 
         // Fetch credential profiles
-        return fetchCredentialProfiles(credentialIds)
+        return credentialProfiles.fetchCredentialProfiles(credentialIds)
                 .compose(profiles -> {
 
                     if (profiles.isEmpty())
@@ -162,43 +167,8 @@ public class DiscoveryEngine extends AbstractVerticle
      */
     private JsonObject createGoPluginInput(String ip, Integer port, JsonArray credentialProfiles)
     {
-        var formattedCredentials = new JsonArray();
+        var formattedCredentials = this.credentialProfiles.formatCredentials(credentialProfiles);
 
-        // Format each credential according to Go expectations
-        for (var i = 0; i < credentialProfiles.size(); i++)
-        {
-            var credential = credentialProfiles.getJsonObject(i);
-
-            if (credential != null)
-            {
-                // Extract the attributes field as a string
-                var attributesStr = credential.getString(Constants.ATTRIBUTES);
-
-                // Parse the attributes string into a JsonObject
-                JsonObject attributes;
-                try
-                {
-                    attributes = new JsonObject(attributesStr);
-                }
-                catch (Exception exception)
-                {
-                    LOGGER.warn("Skipping credential ID {} due to invalid attributes JSON: {}",
-
-                            credential.getInteger(Constants.FIELD_ID, i), exception.getMessage());
-                    continue;
-                }
-
-                // Create formatted credential object
-                var formattedCredential = new JsonObject()
-                        .put(Constants.CREDENTIAL_NAME, credential.getString("name", "credential_" + credential.getInteger(Constants.FIELD_ID, i)))
-                        .put(Constants.CREDENTIAL_TYPE, credential.getString(Constants.TYPE, Constants.SSH))
-                        .put(Constants.ATTRIBUTES, attributes);
-
-                formattedCredentials.add(formattedCredential);
-            }
-        }
-
-        // Create input object with requestType and contexts array
         var context = new JsonObject()
                 .put(Constants.IP, ip)
                 .put(Constants.PORT, port)
@@ -212,48 +182,4 @@ public class DiscoveryEngine extends AbstractVerticle
                 .put(Constants.CONTEXTS, contextsArray);
     }
 
-    /**
-     * Fetches credential profiles for the given credential IDs
-     * @param credentialIds Array of credential IDs
-     * @return Future with array of credential profiles
-     */
-    private Future<JsonArray> fetchCredentialProfiles(JsonArray credentialIds)
-    {
-        var profiles = new JsonArray();
-
-        var future = Future.succeededFuture(profiles);
-
-        for (var i = 0; i < credentialIds.size(); i++)
-        {
-
-            var idObj = credentialIds.getValue(i);
-
-            if (!(idObj instanceof Integer credentialId))
-            {
-                LOGGER.warn("Invalid credential ID format at index {}: {}", i, idObj);
-
-                continue;
-            }
-
-            future = future.compose(res ->
-                    dbHelper.fetchOne(Constants.CREDENTIAL_TABLE, Constants.FIELD_ID, credentialId)
-                            .map(credential -> {
-
-                                if (credential != null)
-                                {
-                                    credential.put(Constants.CREDENTIAL_ID, credentialId);
-
-                                    res.add(credential);
-                                }
-                                else
-                                {
-                                    LOGGER.warn("Credential not found with ID: {}", credentialId);
-                                }
-
-                                return res;
-                            })
-            );
-        }
-        return future;
-    }
 }
