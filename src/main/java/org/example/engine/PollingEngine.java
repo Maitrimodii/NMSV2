@@ -29,7 +29,7 @@ public class PollingEngine extends AbstractVerticle
 
     private final DbQueryHelper dbHelper;
 
-    private CredentialProfiles credentialProfiles;
+    private final CredentialProfiles credentialProfiles;
 
     public PollingEngine(DbQueryHelper dbHelper)
     {

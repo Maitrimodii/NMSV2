@@ -35,17 +35,19 @@ public class ProcessBuilderUtil
      */
     public static Future<Boolean> checkAvailability(Vertx vertx, JsonObject profile)
     {
-        return vertx.executeBlocking(promise -> {
+        return vertx.executeBlocking(() -> {
             try
             {
                 var ip = profile.getString(Constants.IP);
 
                 var port = profile.getInteger(Constants.PORT, 22);
 
-                if (ip == null || ip.isEmpty()) {
+                if (ip == null || ip.isEmpty())
+                {
+
                     LOGGER.error("Invalid IP address: {}", ip);
-                    promise.complete(false);
-                    return;
+
+                    return false;
                 }
 
                 // Check ping first
@@ -54,10 +56,7 @@ public class ProcessBuilderUtil
                 if (!isPingSuccessful)
                 {
                     LOGGER.warn("Ping failed for IP: {}", ip);
-
-                    promise.complete(false);
-
-                    return;
+                    return false;
                 }
 
                 // Check port if needed
@@ -65,22 +64,23 @@ public class ProcessBuilderUtil
                 {
                     LOGGER.warn("Port {} is not open for IP: {}", port, ip);
 
-                    promise.complete(false);
-
-                    return;
+                    return false;
                 }
 
                 LOGGER.info("Device is available at IP: {}, Port: {}", ip, port);
 
-                promise.complete(true);
+                return true;
+
             }
             catch (Exception exception)
             {
                 LOGGER.error("Error checking availability: {}", exception.getMessage(), exception);
-                promise.complete(false);
+
+                return false;
             }
-        });
+        }, false);
     }
+
 
     /**
      * Pings the device to check its availability
@@ -158,44 +158,36 @@ public class ProcessBuilderUtil
      * @param pluginInput JSON array with plugin input
      * @return Future with plugin execution results as a JsonArray or null on failure
      */
-    public static Future<JsonArray> spawnPluginEngine(Vertx vertx, JsonArray pluginInput)
-    {
-        if (pluginInput == null || pluginInput.isEmpty())
-        {
+    public static Future<JsonArray> spawnPluginEngine(Vertx vertx, JsonArray pluginInput) {
+        if (pluginInput == null || pluginInput.isEmpty()) {
             LOGGER.error("Plugin input is null or empty");
 
             return Future.succeededFuture(null);
         }
 
-        return vertx.executeBlocking(promise -> {
+        return vertx.executeBlocking(() -> {
             Process process = null;
 
             try
             {
-                // Check if binary exists
                 if (!new File(GO_BINARY_PATH).exists())
                 {
                     LOGGER.error("Go binary not found at: {}", GO_BINARY_PATH);
 
-                    promise.complete(null);
-
-                    return;
+                    return null;
                 }
 
-                // Start the process
                 var pb = new ProcessBuilder(GO_BINARY_PATH);
 
                 pb.redirectErrorStream(false);
 
                 process = pb.start();
 
-                // Write input to the process
                 var inputString = pluginInput.encode();
 
                 LOGGER.info("Sending input to Go plugin: {}", inputString);
 
-                try (var writer = new BufferedWriter(
-                        new OutputStreamWriter(process.getOutputStream(), StandardCharsets.UTF_8))) {
+                try (var writer = new BufferedWriter(new OutputStreamWriter(process.getOutputStream(), StandardCharsets.UTF_8))) {
 
                     writer.write(inputString);
 
@@ -204,36 +196,30 @@ public class ProcessBuilderUtil
                     writer.flush();
                 }
 
-                // Create a result array to collect outputs
                 var allResults = new JsonArray();
 
-                // Process the output stream within the executeBlocking context
-                try (var reader = new BufferedReader(
-                        new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-
+                try (var reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)))
+                {
                     String line;
+
                     while ((line = reader.readLine()) != null)
                     {
                         if (!line.trim().isEmpty())
                         {
                             try
                             {
-                                // Parse the line as JSON
                                 var resultObj = new JsonObject(line);
 
                                 allResults.add(resultObj);
 
                                 LOGGER.info("Received result from Go plugin: {}", resultObj.encode());
-                            }
-                            catch (Exception exception)
-                            {
+                            } catch (Exception exception) {
                                 LOGGER.error("Failed to parse JSON line: {}, raw output: {}", exception.getMessage(), line);
                             }
                         }
                     }
                 }
 
-                // Wait for process completion with timeout
                 var completed = process.waitFor(PROCESS_TIMEOUT_SEC, TimeUnit.SECONDS);
 
                 if (!completed)
@@ -242,9 +228,7 @@ public class ProcessBuilderUtil
 
                     process.destroyForcibly();
 
-                    promise.complete(allResults.isEmpty() ? null : allResults);
-
-                    return;
+                    return allResults.isEmpty() ? null : allResults;
                 }
 
                 var exitCode = process.exitValue();
@@ -253,21 +237,19 @@ public class ProcessBuilderUtil
                 {
                     LOGGER.error("Go plugin process failed with exit code: {}", exitCode);
 
-                    promise.complete(allResults.isEmpty() ? null : allResults);
-
-                    return;
+                    return allResults.isEmpty() ? null : allResults;
                 }
 
                 LOGGER.info("Go plugin completed successfully with {} results", allResults.size());
 
-                promise.complete(allResults);
-
+                return allResults;
             }
             catch (IOException exception)
             {
+
                 LOGGER.error("I/O error spawning Go plugin: {}", exception.getMessage(), exception);
 
-                promise.complete(null);
+                return null;
             }
             catch (InterruptedException exception)
             {
@@ -275,7 +257,7 @@ public class ProcessBuilderUtil
 
                 Thread.currentThread().interrupt();
 
-                promise.complete(null);
+                return null;
             }
             finally
             {
@@ -284,8 +266,7 @@ public class ProcessBuilderUtil
                     process.destroyForcibly();
                 }
             }
-        });
+        }, false);
+
     }
-
-
 }
