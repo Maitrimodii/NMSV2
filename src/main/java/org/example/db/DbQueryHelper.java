@@ -39,41 +39,45 @@ public class DbQueryHelper
 
     public Future<RowSet<Row>> insert(String table, JsonObject data)
     {
-        var fieldNames = data.stream()
-                .map(Map.Entry::getKey)
-                .toList();
+        try {
+            var fieldNames = data.stream()
+                    .map(Map.Entry::getKey)
+                    .toList();
 
-        var columns = String.join(", ", fieldNames);
+            var columns = String.join(", ", fieldNames);
 
-        var placeholders = IntStream.rangeClosed(1, fieldNames.size())
-                .mapToObj(i -> "$" + i)
-                .collect(Collectors.joining(", "));
+            var placeholders = IntStream.rangeClosed(1, fieldNames.size())
+                    .mapToObj(i -> "$" + i)
+                    .collect(Collectors.joining(", "));
 
 
-        var query = String.format(Constants.SQL_INSERT, table, columns, placeholders);
+            var query = String.format(Constants.SQL_INSERT, table, columns, placeholders);
 
-        var values = Tuple.tuple();
+            var values = Tuple.tuple();
 
-        for (var field : fieldNames)
-        {
-            var value = data.getValue(field);
+            for (var field : fieldNames) {
+                var value = data.getValue(field);
 
-            if (value instanceof JsonArray || value instanceof JsonObject)
-            {
-                values.addValue(value.toString());
+                if (value instanceof JsonArray || value instanceof JsonObject) {
+                    values.addValue(value.toString());
+                } else {
+                    values.addValue(value);
+                }
             }
-            else
-            {
-                values.addValue(value);
-            }
+
+            logger.info("Executing insert query");
+
+            return client
+                    .preparedQuery(query)
+                    .execute(values)
+                    .mapEmpty();
         }
+        catch (Exception exception)
+        {
+            logger.error("Unexpected error during INSERT operation for table {}: {}", table, exception.getMessage(), exception);
 
-        logger.info("Executing insert query");
-
-        return client
-                .preparedQuery(query)
-                .execute(values)
-                .mapEmpty();
+            return Future.failedFuture("Unexpected error during insert: " + exception.getMessage());
+        }
     }
 
     /**
@@ -88,29 +92,39 @@ public class DbQueryHelper
     public Future<Void> update(String table, String idColumn, Object idValue, JsonObject data)
     {
 
-        var fieldNames = data.stream().map(Map.Entry::getKey).toList();
-
-        var setClause = IntStream.rangeClosed(1, fieldNames.size())
-                .mapToObj(i -> fieldNames.get(i - 1) + " = $" + i)
-                .collect(Collectors.joining(", "));
-
-        var query = String.format(Constants.SQL_UPDATE, table, setClause, idColumn, fieldNames.size() + 1);
-
-        var values = Tuple.tuple();
-
-        for (var field : fieldNames)
+        try
         {
-            values.addValue(data.getValue(field));
+            var fieldNames = data.stream().map(Map.Entry::getKey).toList();
+
+            var setClause = IntStream.rangeClosed(1, fieldNames.size())
+                    .mapToObj(i -> fieldNames.get(i - 1) + " = $" + i)
+                    .collect(Collectors.joining(", "));
+
+            var query = String.format(Constants.SQL_UPDATE, table, setClause, idColumn, fieldNames.size() + 1);
+
+            var values = Tuple.tuple();
+
+            for (var field : fieldNames)
+            {
+                values.addValue(data.getValue(field));
+            }
+
+            values.addValue(idValue);
+
+            logger.info("Executing update query");
+
+            return client
+                    .preparedQuery(query)
+                    .execute(values)
+                    .mapEmpty();
+        }
+        catch (Exception exception)
+        {
+            logger.error("Unexpected error during UPDATE operation for table {}: {}", table, exception.getMessage(), exception);
+
+            return Future.failedFuture("Unexpected error during update: " + exception.getMessage());
         }
 
-        values.addValue(idValue);
-
-        logger.info("Executing update query");
-
-        return client
-                .preparedQuery(query)
-                .execute(values)
-                .mapEmpty();
     }
 
     /**
@@ -123,14 +137,24 @@ public class DbQueryHelper
      */
     public Future<Void> delete(String table, String idColumn, Object idValue)
     {
-        var query = String.format(Constants.SQL_DELETE, table, idColumn);
+        try
+        {
+            var query = String.format(Constants.SQL_DELETE, table, idColumn);
 
-        logger.info("Executing DELETE query: {}", query);
+            logger.info("Executing DELETE query: {}", query);
 
-        return client
-                .preparedQuery(query)
-                .execute(Tuple.of(idValue))
-                .mapEmpty();
+            return client
+                    .preparedQuery(query)
+                    .execute(Tuple.of(idValue))
+                    .mapEmpty();
+        }
+        catch(Exception exception)
+        {
+            logger.error("Unexpected error during DELETE operation for table {}: {}", table, exception.getMessage(), exception);
+
+            return Future.failedFuture("Unexpected error during delete: " + exception.getMessage());
+        }
+
     }
 
     /**
@@ -143,21 +167,29 @@ public class DbQueryHelper
      */
     public Future<JsonObject> fetchOne(String table, String idColumn, Object idValue)
     {
-        var query = String.format(Constants.SQL_SELECT_ONE, table, idColumn);
+        try {
+            var query = String.format(Constants.SQL_SELECT_ONE, table, idColumn);
 
-        logger.info("Executing SELECT query: {}", query);
+            logger.info("Executing SELECT query: {}", query);
 
-        return client
-                .preparedQuery(query)
-                .execute(Tuple.of(idValue))
-                .map(rows ->
-                {
-                    var row = rows.iterator().next();
+            return client
+                    .preparedQuery(query)
+                    .execute(Tuple.of(idValue))
+                    .map(rows ->
+                    {
+                        var row = rows.iterator().next();
 
-                    logger.info(String.valueOf(row));
+                        logger.info(String.valueOf(row));
 
-                    return row.toJson();
-                });
+                        return row.toJson();
+                    });
+        }
+        catch (Exception exception)
+        {
+            logger.error("Unexpected error during FETCH ONE operation for table {}: {}", table, exception.getMessage(), exception);
+
+            return Future.failedFuture("Unexpected error during fetch one: " + exception.getMessage());
+        }
     }
 
     /**
@@ -168,22 +200,32 @@ public class DbQueryHelper
      */
     public Future<List<JsonObject>> fetchAll(String table)
     {
-        var query = String.format(Constants.SQL_SELECT_ALL, table);
+        try
+        {
+            var query = String.format(Constants.SQL_SELECT_ALL, table);
 
-        logger.info("Executing SELECT ALL query: {}", query);
+            logger.info("Executing SELECT ALL query: {}", query);
 
-        return client
-                .query(query)
-                .execute()
-                .map(rows ->
-                {
-                    var result = new ArrayList<JsonObject>();
-
-                    for (var row : rows)
+            return client
+                    .query(query)
+                    .execute()
+                    .map(rows ->
                     {
-                        result.add(row.toJson());
-                    }
-                    return result;
-                });
+                        var result = new ArrayList<JsonObject>();
+
+                        for (var row : rows)
+                        {
+                            result.add(row.toJson());
+                        }
+                        return result;
+                    });
+        }
+        catch (Exception exception)
+        {
+            logger.error("Unexpected error during FETCH ALL operation for table {}: {}", table, exception.getMessage(), exception);
+
+            return Future.failedFuture("Unexpected error during fetch all: " + exception.getMessage());
+        }
+
     }
 }

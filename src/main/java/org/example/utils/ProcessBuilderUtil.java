@@ -158,8 +158,10 @@ public class ProcessBuilderUtil
      * @param pluginInput JSON array with plugin input
      * @return Future with plugin execution results as a JsonArray or null on failure
      */
-    public static Future<JsonArray> spawnPluginEngine(Vertx vertx, JsonArray pluginInput) {
-        if (pluginInput == null || pluginInput.isEmpty()) {
+    public static Future<JsonArray> spawnPluginEngine(Vertx vertx, JsonArray pluginInput)
+    {
+        if (pluginInput == null || pluginInput.isEmpty())
+        {
             LOGGER.error("Plugin input is null or empty");
 
             return Future.succeededFuture(null);
@@ -187,7 +189,8 @@ public class ProcessBuilderUtil
 
                 LOGGER.info("Sending input to Go plugin: {}", inputString);
 
-                try (var writer = new BufferedWriter(new OutputStreamWriter(process.getOutputStream(), StandardCharsets.UTF_8))) {
+                try (var writer = new BufferedWriter(new OutputStreamWriter(process.getOutputStream(), StandardCharsets.UTF_8)))
+                {
 
                     writer.write(inputString);
 
@@ -213,7 +216,9 @@ public class ProcessBuilderUtil
                                 allResults.add(resultObj);
 
                                 LOGGER.info("Received result from Go plugin: {}", resultObj.encode());
-                            } catch (Exception exception) {
+                            }
+                            catch (Exception exception)
+                            {
                                 LOGGER.error("Failed to parse JSON line: {}, raw output: {}", exception.getMessage(), line);
                             }
                         }
@@ -267,6 +272,5 @@ public class ProcessBuilderUtil
                 }
             }
         }, false);
-
     }
 }

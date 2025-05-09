@@ -31,11 +31,21 @@ public class DiscoveryEngine extends AbstractVerticle
     @Override
     public void start(Promise<Void> promise)
     {
-        vertx.eventBus().consumer(Constants.DISCOVERY_ADDRESS, this::handleDiscoveryRequest);
+        try
+        {
+            vertx.eventBus().consumer(Constants.DISCOVERY_ADDRESS, this::handleDiscoveryRequest);
 
-        LOGGER.info("DiscoveryEngine started, listening on {}", Constants.DISCOVERY_ADDRESS);
+            LOGGER.info("DiscoveryEngine started, listening on {}", Constants.DISCOVERY_ADDRESS);
 
-        promise.complete();
+            promise.complete();
+        }
+        catch (Exception exception)
+        {
+            LOGGER.error("Failed to start DiscoveryEngine: {}", exception.getMessage(), exception);
+
+            promise.fail("Failed to start DiscoveryEngine: " + exception.getMessage());
+        }
+
     }
 
     /**
@@ -81,81 +91,91 @@ public class DiscoveryEngine extends AbstractVerticle
         var credentialIds = payload.getJsonArray(Constants.CREDENTIAL_IDS);
 
         // Fetch credential profiles
-        return credentialProfiles.fetchCredentialProfiles(credentialIds)
-                .compose(profiles -> {
 
-                    if (profiles.isEmpty())
-                    {
-                        result.put(Constants.STATUS, Constants.FAIL);
+        try
+        {
+            return credentialProfiles.fetchCredentialProfiles(credentialIds)
+                    .compose(profiles -> {
 
-                        return Future.succeededFuture(result);
-                    }
+                        if (profiles.isEmpty())
+                        {
+                            result.put(Constants.STATUS, Constants.FAIL);
 
-                    // Format data according to Go plugin expectations
-                    var goPluginInput = createGoPluginInput(ip, port, profiles);
+                            return Future.succeededFuture(result);
+                        }
 
-                    // Check device availability asynchronously
-                    var checkObject = new JsonObject()
-                            .put(Constants.IP, ip)
-                            .put(Constants.PORT, port);
+                        // Format data according to Go plugin expectations
+                        var goPluginInput = createGoPluginInput(ip, port, profiles);
 
-                    return ProcessBuilderUtil.checkAvailability(vertx, checkObject)
-                            .compose(isAvailable -> {
+                        // Check device availability asynchronously
+                        var checkObject = new JsonObject()
+                                .put(Constants.IP, ip)
+                                .put(Constants.PORT, port);
 
-                                if (!isAvailable)
-                                {
-                                    result.put(Constants.STATUS, Constants.FAIL);
+                        return ProcessBuilderUtil.checkAvailability(vertx, checkObject)
+                                .compose(isAvailable -> {
 
-                                    return Future.succeededFuture(result);
-                                }
+                                    if (!isAvailable)
+                                    {
+                                        result.put(Constants.STATUS, Constants.FAIL);
 
-                                // Spawn plugin engine with correctly formatted input
-                                var pluginInput = new JsonArray().add(goPluginInput);
+                                        return Future.succeededFuture(result);
+                                    }
 
-                                LOGGER.info("Plugin input: {}", pluginInput.encode());
+                                    // Spawn plugin engine with correctly formatted input
+                                    var pluginInput = new JsonArray().add(goPluginInput);
 
-                                return ProcessBuilderUtil.spawnPluginEngine(vertx, pluginInput)
-                                        .compose(resultArray -> {
-                                            if (resultArray == null || resultArray.isEmpty())
-                                            {
-                                                result.put(Constants.STATUS, Constants.FAIL);
+                                    LOGGER.info("Plugin input: {}", pluginInput.encode());
+
+                                    return ProcessBuilderUtil.spawnPluginEngine(vertx, pluginInput)
+                                            .compose(resultArray -> {
+                                                if (resultArray == null || resultArray.isEmpty())
+                                                {
+                                                    result.put(Constants.STATUS, Constants.FAIL);
+                                                    return Future.succeededFuture(result);
+                                                }
+
+                                                // For discovery, extract the status from the first result object
+                                                var firstResult = resultArray.getJsonObject(0);
+
+                                                if (firstResult != null && Constants.SUCCESS.equalsIgnoreCase(firstResult.getString(Constants.STATUS, "")))
+                                                {
+                                                    result.put(Constants.STATUS, Constants.SUCCESS);
+                                                }
+                                                else
+                                                {
+                                                    result.put(Constants.STATUS, Constants.FAIL);
+                                                }
+
                                                 return Future.succeededFuture(result);
-                                            }
+                                            });
+                                })
+                                .compose(res -> {
+                                    var finalStatus = res.getString(Constants.STATUS).equals(Constants.SUCCESS) ? Constants.UP : Constants.DOWN;
 
-                                            // For discovery, extract the status from the first result object
-                                            var firstResult = resultArray.getJsonObject(0);
+                                    var updateFields = new JsonObject().put(Constants.STATUS, finalStatus);
 
-                                            if (firstResult != null && Constants.SUCCESS.equalsIgnoreCase(firstResult.getString(Constants.STATUS, "")))
-                                            {
-                                                result.put(Constants.STATUS, Constants.SUCCESS);
-                                            }
-                                            else
-                                            {
-                                                result.put(Constants.STATUS, Constants.FAIL);
-                                            }
+                                    var id = Integer.parseInt(discoveryId);
 
-                                            return Future.succeededFuture(result);
-                                        });
-                            })
-                            .compose(res -> {
-                                var finalStatus = res.getString(Constants.STATUS).equals(Constants.SUCCESS) ? Constants.UP : Constants.DOWN;
+                                    // Update database with discovery status
+                                    return dbHelper.update(Constants.DISCOVERY_TABLE, Constants.FIELD_ID, id, updateFields)
+                                            .map(updateResult -> {
+                                                LOGGER.info("Discovery status updated successfully for id={}", discoveryId);
+                                                return res;
+                                            })
+                                            .otherwise(err -> {
+                                                LOGGER.error("Failed to update discovery status for id={}: {}", discoveryId, err.getMessage());
+                                                return res;
+                                            });
+                                });
+                    });
+        } catch (Exception exception)
+        {
+            LOGGER.error("Unexpected error during discovery process for id={}: {}", discoveryId, exception.getMessage(), exception);
 
-                                var updateFields = new JsonObject().put(Constants.STATUS, finalStatus);
+            result.put(Constants.STATUS, Constants.FAIL);
 
-                                var id = Integer.parseInt(discoveryId);
-
-                                // Update database with discovery status
-                                return dbHelper.update(Constants.DISCOVERY_TABLE, Constants.FIELD_ID, id, updateFields)
-                                        .map(updateResult -> {
-                                            LOGGER.info("Discovery status updated successfully for id={}", discoveryId);
-                                            return res;
-                                        })
-                                        .otherwise(err -> {
-                                            LOGGER.error("Failed to update discovery status for id={}: {}", discoveryId, err.getMessage());
-                                            return res;
-                                        });
-                            });
-                });
+            return Future.succeededFuture(result);        }
     }
 
     /**
@@ -180,6 +200,7 @@ public class DiscoveryEngine extends AbstractVerticle
         return new JsonObject()
                 .put(Constants.REQUEST_TYPE, Constants.DISCOVERY)
                 .put(Constants.CONTEXTS, contextsArray);
+
     }
 
 }

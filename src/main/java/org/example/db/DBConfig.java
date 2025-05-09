@@ -23,38 +23,47 @@ public class DBConfig {
      */
     public static Future<SqlClient> createPgPool(Vertx vertx, JsonObject config)
     {
-        var dbConfig = config.getJsonObject(Constants.DB);
+        try {
+            var dbConfig = config.getJsonObject(Constants.DB);
 
-        var connectOptions = new PgConnectOptions()
-                .setPort(dbConfig.getInteger(Constants.DB_PORT, Constants.DEFAULT_DB_PORT))
-                .setHost(dbConfig.getString(Constants.DB_HOST, Constants.DEFAULT_DB_HOST))
-                .setDatabase(dbConfig.getString(Constants.DB_DATABASE, Constants.DEFAULT_DB_DATABASE))
-                .setUser(dbConfig.getString(Constants.DB_USER, Constants.DEFAULT_DB_USER))
-                .setPassword(dbConfig.getString(Constants.DB_PASSWORD, Constants.DEFAULT_DB_PASSWORD));
+            var connectOptions = new PgConnectOptions()
+                    .setPort(dbConfig.getInteger(Constants.DB_PORT, Constants.DEFAULT_DB_PORT))
+                    .setHost(dbConfig.getString(Constants.DB_HOST, Constants.DEFAULT_DB_HOST))
+                    .setDatabase(dbConfig.getString(Constants.DB_DATABASE, Constants.DEFAULT_DB_DATABASE))
+                    .setUser(dbConfig.getString(Constants.DB_USER, Constants.DEFAULT_DB_USER))
+                    .setPassword(dbConfig.getString(Constants.DB_PASSWORD, Constants.DEFAULT_DB_PASSWORD));
 
-        var poolOptions = new PoolOptions()
-                .setMaxSize(dbConfig.getInteger(Constants.DB_POOL_SIZE, Constants.DEFAULT_DB_POOL_SIZE));
+            var poolOptions = new PoolOptions()
+                    .setMaxSize(dbConfig.getInteger(Constants.DB_POOL_SIZE, Constants.DEFAULT_DB_POOL_SIZE));
 
-        var client = PgBuilder
-                .client()
-                .with(poolOptions)
-                .connectingTo(connectOptions)
-                .using(vertx)
-                .build();
+            var client = PgBuilder
+                    .client()
+                    .with(poolOptions)
+                    .connectingTo(connectOptions)
+                    .using(vertx)
+                    .build();
 
-        // Test the connection
-        return client.query("SELECT 1").execute()
-                .compose(result -> initializeSchema(vertx, client))
-                .map(client)
-                .recover(err -> {
+            // Test the connection
+            return client.query("SELECT 1").execute()
+                    .compose(result -> initializeSchema(vertx, client))
+                    .map(client)
+                    .recover(err -> {
 
-                    logger.error("Failed to connect to database", err);
+                        logger.error("Failed to connect to database", err);
 
-                    client.close();
+                        client.close();
 
-                    return Future.failedFuture("Failed to connect to database: " + err.getMessage());
-                });
+                        return Future.failedFuture("Failed to connect to database: " + err.getMessage());
+                    });
+        }
+        catch (Exception exception)
+        {
+            logger.error("Unexpected error while creating database pool: {}", exception.getMessage(), exception);
+
+            return Future.failedFuture("Unexpected error while creating database pool: " + exception.getMessage());
+        }
     }
+
 
     /**
      * Initializes the schema by executing the SQL queries from the schema file.
@@ -65,21 +74,29 @@ public class DBConfig {
      */
     private static Future<Void> initializeSchema(Vertx vertx, SqlClient client)
     {
-        return vertx.fileSystem().readFile(Constants.SCHEMA)
-                .compose(buffer -> {
+        try {
+            return vertx.fileSystem().readFile(Constants.SCHEMA)
+                    .compose(buffer -> {
 
-                    var schemaSql = buffer.toString();
+                        var schemaSql = buffer.toString();
 
-                    var queries = schemaSql.split(";(\\s*\\n|\\s*$)");
+                        var queries = schemaSql.split(";(\\s*\\n|\\s*$)");
 
-                    return executeQueries(client, queries, 0);
-                })
-                .recover(err -> {
+                        return executeQueries(client, queries, 0);
+                    })
+                    .recover(err -> {
 
-                    logger.error("Failed to load schema.sql", err);
+                        logger.error("Failed to load schema.sql", err);
 
-                    return Future.failedFuture("Failed to load schema.sql: " + err.getMessage());
-                });
+                        return Future.failedFuture("Failed to load schema.sql: " + err.getMessage());
+                    });
+        }
+        catch (Exception exception)
+        {
+            logger.error("Unexpected error while initializing schema: {}", exception.getMessage(), exception);
+
+            return Future.failedFuture("Unexpected error while initializing schema: " + exception.getMessage());
+        }
     }
 
     /**
@@ -104,13 +121,22 @@ public class DBConfig {
             return executeQueries(client, queries, index + 1);
         }
 
-        return client.query(query).execute()
-                .compose(result -> executeQueries(client, queries, index + 1))
-                .recover(err ->
-                {
-                    logger.error("Schema init failed for query: {}", query, err);
+        try
+        {
+            return client.query(query).execute()
+                    .compose(result -> executeQueries(client, queries, index + 1))
+                    .recover(err ->
+                    {
+                        logger.error("Schema init failed for query: {}", query, err);
 
-                    return Future.failedFuture(err);
-                });
+                        return Future.failedFuture(err);
+                    });
+        }
+        catch (Exception exception)
+        {
+            logger.error("Unexpected error while executing schema query {}: {}", query, exception.getMessage(), exception);
+
+            return Future.failedFuture("Unexpected error while executing schema query: " + exception.getMessage());
+        }
     }
 }

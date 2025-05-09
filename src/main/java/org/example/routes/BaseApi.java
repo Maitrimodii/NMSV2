@@ -64,7 +64,7 @@ public abstract class BaseApi
      * Validates the request body against the JSON schema.
      *
      * @param ctx the routing context containing the request body.
-     * @return true if validation fails, false if successful.
+     * @return false if validation fails, true if successful.
      */
     protected boolean validate(RoutingContext ctx)
     {
@@ -95,7 +95,9 @@ public abstract class BaseApi
                     errorMsg.append(error.getMessage()).append("; ");
                 }
 
-                ApiResponse.error(ctx, errorMsg.toString(), Constants.HTTP_BAD_REQUEST);
+                logger.error(errorMsg.toString());
+
+                ApiResponse.error(ctx, "fields are required", Constants.HTTP_BAD_REQUEST);
 
                 return false;
             }
@@ -105,7 +107,7 @@ public abstract class BaseApi
         {
             logger.error("Validation failed for {}: {}", moduleName, exception.getMessage());
 
-            ApiResponse.error(ctx, "Validation error: " + exception.getMessage(), Constants.HTTP_BAD_REQUEST);
+            ApiResponse.error(ctx, "Validation error: " , Constants.HTTP_BAD_REQUEST);
 
             return false;
         }

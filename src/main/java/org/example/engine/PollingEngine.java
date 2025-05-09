@@ -23,7 +23,7 @@ public class PollingEngine extends AbstractVerticle
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(PollingEngine.class);
 
-    private static final long POLLING_INTERVAL_MS = 10_000;
+    private static final long POLLING_INTERVAL_MS = 10000;
 
     private final Map<Integer, Long> lastPollTimeMap = new HashMap<>();
 
@@ -41,11 +41,20 @@ public class PollingEngine extends AbstractVerticle
     @Override
     public void start(Promise<Void> promise)
     {
-        vertx.setPeriodic(POLLING_INTERVAL_MS, id -> pollDevices());
+        try {
+            vertx.setPeriodic(POLLING_INTERVAL_MS, id -> pollDevices());
 
-        LOGGER.info("PollingEngine started with interval {}ms", POLLING_INTERVAL_MS);
+            LOGGER.info("PollingEngine started with interval {}ms", POLLING_INTERVAL_MS);
 
-        promise.complete();
+            promise.complete();
+        }
+        catch (Exception exception)
+        {
+
+            LOGGER.error("Failed to start PollingEngine: {}", exception.getMessage(), exception);
+
+            promise.fail(exception);
+        }
     }
 
     /**
@@ -55,44 +64,47 @@ public class PollingEngine extends AbstractVerticle
     {
         LOGGER.debug("Starting device polling cycle");
 
-        dbHelper.fetchAll(Constants.PROVISION_TABLE)
-                .onSuccess(devices -> {
-                    if (devices == null || devices.isEmpty())
-                    {
-                        LOGGER.debug("No provisioned devices found");
-                        return;
-                    }
+        try {
+            dbHelper.fetchAll(Constants.PROVISION_TABLE)
+                    .onSuccess(devices -> {
+                        if (devices == null || devices.isEmpty()) {
+                            LOGGER.debug("No provisioned devices found");
+                            return;
+                        }
 
-                    // Filter devices that are due for polling
-                    var devicesToProcess = filterDevicesForPolling(devices);
+                        // Filter devices that are due for polling
+                        var devicesToProcess = filterDevicesForPolling(devices);
 
-                    if (devicesToProcess.isEmpty()) {
-                        LOGGER.debug("No devices due for polling in this cycle");
-                        return;
-                    }
+                        if (devicesToProcess.isEmpty()) {
+                            LOGGER.debug("No devices due for polling in this cycle");
+                            return;
+                        }
 
-                    LOGGER.info("Processing {} devices that are due for polling", devicesToProcess.size());
+                        LOGGER.info("Processing {} devices that are due for polling", devicesToProcess.size());
 
-                    processDevices(devicesToProcess)
-                            .onSuccess(v -> {
-                                // Update last poll time for processed devices
-                                var currentTime = System.currentTimeMillis();
+                        processDevices(devicesToProcess)
+                                .onSuccess(v -> {
+                                    // Update last poll time for processed devices
+                                    var currentTime = System.currentTimeMillis();
 
-                                for (var device : devicesToProcess)
-                                {
-                                    var provisionId = device.getInteger(Constants.FIELD_ID);
+                                    for (var device : devicesToProcess) {
+                                        var provisionId = device.getInteger(Constants.FIELD_ID);
 
-                                    if (provisionId != null)
-                                    {
-                                        lastPollTimeMap.put(provisionId, currentTime);
+                                        if (provisionId != null) {
+                                            lastPollTimeMap.put(provisionId, currentTime);
+                                        }
+
                                     }
-
-                                }
-                                LOGGER.debug("Updated last poll timestamps for {} devices", devicesToProcess.size());
-                            })
-                            .onFailure(err -> LOGGER.error("Failed to process devices: {}", err.getMessage()));
-                })
-                .onFailure(err -> LOGGER.error("Failed to fetch provisions: {}", err.getMessage()));
+                                    LOGGER.debug("Updated last poll timestamps for {} devices", devicesToProcess.size());
+                                })
+                                .onFailure(err -> LOGGER.error("Failed to process devices: {}", err.getMessage()));
+                    })
+                    .onFailure(err -> LOGGER.error("Failed to fetch provisions: {}", err.getMessage()));
+        }
+        catch (Exception exception)
+        {
+                LOGGER.error("Error in pollDevices: {}", exception.getMessage(), exception);
+            }
     }
 
     /**
@@ -103,24 +115,36 @@ public class PollingEngine extends AbstractVerticle
      */
     private List<JsonObject> filterDevicesForPolling(List<JsonObject> allDevices)
     {
-        var currentTime = System.currentTimeMillis();
+        try
+        {
+            var currentTime = System.currentTimeMillis();
 
-        return allDevices.stream()
-                .filter(device -> {
-                    var provisionId = device.getInteger(Constants.FIELD_ID);
 
-                    if (provisionId == null)
-                    {
-                        return false;
-                    }
+            return allDevices.stream()
+                    .filter(device -> {
+                        var provisionId = device.getInteger(Constants.FIELD_ID);
 
-                    // Get last poll time, default to 0 if never polled
-                    var lastPollTime = lastPollTimeMap.getOrDefault(provisionId, 0L);
+                        if (provisionId == null)
+                        {
+                            return false;
+                        }
 
-                    // Check if enough time has passed since last poll
-                    return (currentTime - lastPollTime >= POLLING_INTERVAL_MS);
-                })
-                .toList();
+
+                        // Get last poll time, default to 0 if never polled
+                        var lastPollTime = lastPollTimeMap.getOrDefault(provisionId, 0L);
+
+                        // Check if enough time has passed since last poll
+                        return (currentTime - lastPollTime >= POLLING_INTERVAL_MS);
+                    })
+                    .toList();
+        }
+        catch (Exception exception)
+        {
+            LOGGER.error("Error in filterDevicesForPolling: {}", exception.getMessage(), exception);
+
+            return List.of();
+        }
+
     }
 
     /**
@@ -132,49 +156,61 @@ public class PollingEngine extends AbstractVerticle
     private Future<Void> processDevices(List<JsonObject> devices)
     {
         LOGGER.info("Processing {} provisioned devices", devices.size());
-        var contexts = new JsonArray();
 
-        // Collect contexts for all devices
-        var collectFuture = Future.succeededFuture(contexts);
-
-        for (var device : devices)
+        try
         {
-            collectFuture = collectFuture.compose(res ->
-                    collectDeviceMetrics(device).map(context -> {
-                        if (context != null) {
-                            res.add(context);
-                        }
-                        return res;
-                    })
-            );
-        }
+            var contexts = new JsonArray();
 
-        return collectFuture.compose(contextsArray -> {
-            if (contextsArray.isEmpty())
+            // Collect contexts for all devices
+            var collectFuture = Future.succeededFuture(contexts);
+
+            for (var device : devices)
             {
-                LOGGER.debug("No valid device contexts to process");
-                return Future.succeededFuture();
+                collectFuture = collectFuture.compose(res ->
+                        collectDeviceMetrics(device).map(context -> {
+                            if (context != null)
+                            {
+                                res.add(context);
+                            }
+                            return res;
+                        })
+                );
             }
 
-            var goPluginInput = createGoPluginInput(contextsArray);
+            return collectFuture.compose(contextsArray -> {
+                if (contextsArray.isEmpty())
+                {
+                    LOGGER.debug("No valid device contexts to process");
+                    return Future.succeededFuture();
+                }
 
-            var pluginInput = new JsonArray().add(goPluginInput);
+                var goPluginInput = createGoPluginInput(contextsArray);
 
-            return ProcessBuilderUtil.spawnPluginEngine(vertx, pluginInput)
-                    .compose(resultArray -> {
+                var pluginInput = new JsonArray().add(goPluginInput);
 
-                        if (resultArray == null || resultArray.isEmpty())
-                        {
-                            LOGGER.warn("Failed to collect metrics for devices");
-                            return Future.succeededFuture();
-                        }
+                return ProcessBuilderUtil.spawnPluginEngine(vertx, pluginInput)
+                        .compose(resultArray -> {
 
-                        LOGGER.info("Successfully collected metrics for devices");
+                            if (resultArray == null || resultArray.isEmpty())
+                            {
+                                LOGGER.warn("Failed to collect metrics for devices");
+                                return Future.succeededFuture();
+                            }
 
-                        // Process and store the results from the Go plugin
-                        return processPluginResults(resultArray);
-                    });
-        });
+                            LOGGER.info("Successfully collected metrics for devices");
+
+                            // Process and store the results from the Go plugin
+                            return processPluginResults(resultArray);
+                        });
+            });
+        }
+        catch (Exception e)
+        {
+            LOGGER.error("Error in processing Devices: {}", e.getMessage(), e);
+
+            return Future.failedFuture("error in processing devices");
+        }
+
     }
 
     /**
@@ -185,63 +221,68 @@ public class PollingEngine extends AbstractVerticle
      */
     private Future<Void> processPluginResults(JsonArray resultArray)
     {
-        if (resultArray == null || resultArray.isEmpty())
-        {
+        try {
+            if (resultArray == null || resultArray.isEmpty()) {
+                return Future.succeededFuture();
+            }
+
+            LOGGER.info("Processing plugin results for {} entries", resultArray.size());
+
+            // Process each result and store its metrics
+            for (var i = 0; i < resultArray.size(); i++) {
+                var result = resultArray.getJsonObject(i);
+
+                if (result == null) {
+                    continue;
+                }
+
+                var status = result.getString(Constants.STATUS, "");
+
+                if (!Constants.SUCCESS.equalsIgnoreCase(status)) {
+                    LOGGER.warn("Result has non-success status: {}", status);
+
+                    continue;
+                }
+
+                var provisionId = result.getInteger(Constants.PROVISION_ID);
+
+                if (provisionId == null) {
+                    LOGGER.warn("Result missing provision ID, skipping metrics storage");
+
+                    continue;
+                }
+
+                // Get metrics from the result
+                var metrics = result.getJsonObject(Constants.RESULT, new JsonObject());
+
+                if (metrics.isEmpty()) {
+                    LOGGER.warn("No metrics data found for provision ID: {}", provisionId);
+
+                    continue;
+                }
+
+                final var finalProvisionId = provisionId;
+
+                final var finalMetrics = metrics;
+
+                return Future.succeededFuture().compose(v ->
+                        storeMetricsInDatabase(new JsonObject()
+                                .put(Constants.STATUS, status)
+                                .put(Constants.RESULT, finalMetrics)
+                                .put(Constants.PROVISION_ID, finalProvisionId))
+                );
+            }
+
             return Future.succeededFuture();
         }
-
-        LOGGER.info("Processing plugin results for {} entries", resultArray.size());
-
-        Future<Void> resultFuture = Future.succeededFuture();
-
-        // Process each result and store its metrics
-        for (var i = 0; i < resultArray.size(); i++)
+        catch (Exception exception)
         {
-            var result = resultArray.getJsonObject(i);
-            if (result == null)
-            {
-                continue;
-            }
+            LOGGER.error("Error in processPluginResults: {}", exception.getMessage(), exception);
 
-            var status = result.getString(Constants.STATUS, "");
-
-            if (!Constants.SUCCESS.equalsIgnoreCase(status))
-            {
-                LOGGER.warn("Result has non-success status: {}", status);
-                continue;
-            }
-
-            var provisionId = result.getInteger(Constants.PROVISION_ID);
-
-            if (provisionId == null)
-            {
-                LOGGER.warn("Result missing provision ID, skipping metrics storage");
-                continue;
-            }
-
-            // Get metrics from the result
-            var metrics = result.getJsonObject(Constants.RESULT, new JsonObject());
-
-            if (metrics.isEmpty())
-            {
-                LOGGER.warn("No metrics data found for provision ID: {}", provisionId);
-                continue;
-            }
-
-            final var finalProvisionId = provisionId;
-
-            final var finalMetrics = metrics;
-
-            resultFuture = resultFuture.compose(v ->
-                    storeMetricsInDatabase(new JsonObject()
-                            .put(Constants.STATUS, status)
-                            .put(Constants.RESULT, finalMetrics)
-                            .put(Constants.PROVISION_ID, finalProvisionId))
-            );
+            return Future.succeededFuture();
         }
-
-        return resultFuture;
     }
+
 
     /**
      * Collects device metrics by checking availability and fetching credentials
@@ -315,9 +356,18 @@ public class PollingEngine extends AbstractVerticle
      */
     private JsonObject createGoPluginInput(JsonArray contexts)
     {
-        return new JsonObject()
-                .put(Constants.REQUEST_TYPE, Constants.COLLECT)
-                .put(Constants.CONTEXTS, contexts);
+        try
+        {
+            return new JsonObject()
+                    .put(Constants.REQUEST_TYPE, Constants.COLLECT)
+                    .put(Constants.CONTEXTS, contexts);
+        }
+        catch (Exception exception)
+        {
+            LOGGER.error("Error creating Go plugin input: {}", exception.getMessage(), exception);
+
+            return new JsonObject();
+        }
     }
 
     /**
@@ -328,48 +378,53 @@ public class PollingEngine extends AbstractVerticle
      */
     private Future<Void> storeMetricsInDatabase(JsonObject result)
     {
-        if (result == null || !result.containsKey(Constants.STATUS) ||
-                !result.getString(Constants.STATUS).equalsIgnoreCase(Constants.SUCCESS))
-        {
-            return Future.failedFuture("result are not present");
+        try {
+            if (result == null || !result.containsKey(Constants.STATUS) ||
+                    !result.getString(Constants.STATUS).equalsIgnoreCase(Constants.SUCCESS)) {
+                return Future.failedFuture("result are not present");
+            }
+
+            // Extract provision ID from the result
+            var provisionId = result.getInteger(Constants.PROVISION_ID, -1);
+
+            if (provisionId == -1) {
+                LOGGER.warn("Missing provision ID in result, cannot store metrics");
+
+                return Future.failedFuture("Missing provision ID in result, cannot store metrics");
+            }
+
+            // Extract the data (metrics) from the result
+            var data = result.getJsonObject(Constants.RESULT, new JsonObject());
+
+            if (data.isEmpty()) {
+                LOGGER.warn("No metrics data found for provision ID: {}", provisionId);
+
+                return Future.succeededFuture();
+            }
+
+            var timestampMillis = System.currentTimeMillis();
+
+            var timestamp = LocalDateTime.ofInstant(
+                    Instant.ofEpochMilli(timestampMillis), ZoneOffset.UTC);
+
+            // Create insert record with provision ID, data and timestamp
+            var record = new JsonObject()
+                    .put(Constants.PROVISION_ID, provisionId)
+                    .put(Constants.DATA, data)
+                    .put(Constants.TIMESTAMP, timestamp);
+
+            LOGGER.info("Storing metrics in database for provision ID: {}", provisionId);
+
+            return dbHelper.insert(Constants.POLLING_TABLE, record)
+                    .onSuccess(id -> LOGGER.info("Metrics stored"))
+                    .onFailure(err -> LOGGER.error("Failed to store metrics: {}", err.getMessage()))
+                    .mapEmpty();
         }
-
-        // Extract provision ID from the result
-        var provisionId = result.getInteger(Constants.PROVISION_ID, -1);
-
-        if (provisionId == -1)
+        catch (Exception exception)
         {
-            LOGGER.warn("Missing provision ID in result, cannot store metrics");
+            LOGGER.error("Error in storeMetricsInDatabase: {}", exception.getMessage(), exception);
 
-            return Future.failedFuture("Missing provision ID in result, cannot store metrics");
+            return Future.failedFuture("Error in storeMetricsInDatabase");
         }
-
-        // Extract the data (metrics) from the result
-        var data = result.getJsonObject(Constants.RESULT, new JsonObject());
-
-        if (data.isEmpty())
-        {
-            LOGGER.warn("No metrics data found for provision ID: {}", provisionId);
-
-            return Future.succeededFuture();
-        }
-
-        var timestampMillis = System.currentTimeMillis();
-
-        var timestamp = LocalDateTime.ofInstant(
-                Instant.ofEpochMilli(timestampMillis), ZoneOffset.UTC);
-
-        // Create insert record with provision ID, data and timestamp
-        var record = new JsonObject()
-                .put(Constants.PROVISION_ID, provisionId)
-                .put(Constants.DATA, data)
-                .put(Constants.TIMESTAMP, timestamp);
-
-        LOGGER.info("Storing metrics in database for provision ID: {}", provisionId);
-
-        return dbHelper.insert(Constants.POLLING_TABLE, record)
-                .onSuccess(id -> LOGGER.info("Metrics stored"))
-                .onFailure(err -> LOGGER.error("Failed to store metrics: {}", err.getMessage()))
-                .mapEmpty();
     }
 }
