@@ -45,53 +45,63 @@ public class DiscoveryRoutes extends BaseApi
      */
     public void runDiscovery(RoutingContext ctx)
     {
-        var discoveryId = ctx.pathParam(FIELD_ID);
+        try
+        {
+            var discoveryId = ctx.pathParam(FIELD_ID);
 
-        var id = Integer.parseInt(discoveryId);
+            var id = Integer.parseInt(discoveryId);
 
-        // Fetch discovery profile
-        dbHelper.fetchOne(Constants.DISCOVERY_TABLE, FIELD_ID, id)
-                .compose(discovery -> {
-                    logger.info(String.valueOf(discovery));
+            // Fetch discovery profile
+            dbHelper.fetchOne(Constants.DISCOVERY_TABLE, FIELD_ID, id)
+                    .compose(discovery -> {
+                        logger.info(String.valueOf(discovery));
 
-                    // Prepare payload for DiscoveryEngine
-                    var payload = new JsonObject()
-                            .put(Constants.REQUEST_TYPE, Constants.DISCOVERY)
-                            .put(Constants.DISCOVERY_ID, id)
-                            .put(Constants.IP, discovery.getString(Constants.IP))
-                            .put(Constants.PORT, discovery.getInteger(Constants.PORT, 22))
-                            .put(Constants.CREDENTIAL_IDS, discovery.getString(Constants.CREDENTIAL_IDS, "[]"));
-
-
-                    var credentialIdsStr = discovery.getString(Constants.CREDENTIAL_IDS, "[]");
-
-                    try
-                    {
-                        var credentialIdsArray = new JsonArray(credentialIdsStr);
+                        // Prepare payload for DiscoveryEngine
+                        var payload = new JsonObject()
+                                .put(Constants.REQUEST_TYPE, Constants.DISCOVERY)
+                                .put(Constants.DISCOVERY_ID, id)
+                                .put(Constants.IP, discovery.getString(Constants.IP))
+                                .put(Constants.PORT, discovery.getInteger(Constants.PORT, 22))
+                                .put(Constants.CREDENTIAL_IDS, discovery.getString(Constants.CREDENTIAL_IDS, "[]"));
 
 
-                        payload.put(Constants.CREDENTIAL_IDS, credentialIdsArray);
-                    }
-                    catch (Exception exception)
-                    {
-                        logger.error("Failed to parse credential_ids for discovery id={}: {}", discoveryId, exception.getMessage());
+                        var credentialIdsStr = discovery.getString(Constants.CREDENTIAL_IDS, "[]");
 
-                        return Future.failedFuture("Invalid credential_ids format");
-                    }
+                        try
+                        {
+                            var credentialIdsArray = new JsonArray(credentialIdsStr);
 
-                    // Send to event bus
 
-                    return ctx.vertx().eventBus().request(Constants.DISCOVERY_ADDRESS, payload)
-                            .map(message -> (JsonObject) message.body());
-                })
+                            payload.put(Constants.CREDENTIAL_IDS, credentialIdsArray);
+                        }
+                        catch (Exception exception)
+                        {
+                            logger.error("Failed to parse credential_ids for discovery id={}: {}", discoveryId, exception.getMessage());
 
-                .onSuccess(result -> ApiResponse.success(ctx, result,"", Constants.HTTP_OK))
+                            return Future.failedFuture("Invalid credential_ids format");
+                        }
 
-                .onFailure(err -> {
-                    logger.error("Run discovery failed for id={}: {}", discoveryId, err.getMessage());
+                        // Send to event bus
 
-                    ApiResponse.error(ctx, err.getMessage(), Constants.HTTP_BAD_REQUEST);
-                });
+                        return ctx.vertx().eventBus().request(Constants.DISCOVERY_ADDRESS, payload)
+                                .map(message -> (JsonObject) message.body());
+                    })
+
+                    .onSuccess(result -> ApiResponse.success(ctx, result,"", Constants.HTTP_OK))
+
+                    .onFailure(err -> {
+                        logger.error("Run discovery failed for id={}: {}", discoveryId, err.getMessage());
+
+                        ApiResponse.error(ctx, err.getMessage(), Constants.HTTP_BAD_REQUEST);
+                    });
+        }
+        catch (Exception exception)
+        {
+            logger.error("Run discovery failed : {}",  exception.getMessage());
+
+            ApiResponse.error(ctx, exception.getMessage(), Constants.HTTP_BAD_REQUEST);
+        }
+
     }
 
     /**

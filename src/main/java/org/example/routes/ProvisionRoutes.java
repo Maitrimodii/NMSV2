@@ -53,30 +53,40 @@ public class ProvisionRoutes extends BaseApi
      */
     private void startProvision(RoutingContext ctx)
     {
-        var discoveryId = parseId(ctx);
-
-        if (discoveryId == null)
+        try
         {
-            return;
+            var discoveryId = parseId(ctx);
+
+            if (discoveryId == null)
+            {
+                return;
+            }
+
+            // Verify discovery ID exists and is valid, then create provision
+            verifyDiscoveryAndProvision(discoveryId)
+                    .onSuccess(provisionData ->
+                    {
+                        // Insert provision record
+                        dbHelper.insert(Constants.PROVISION_TABLE, provisionData)
+                                .onSuccess(res -> ApiResponse.success(ctx, provisionData, "Device provisioning started", 201))
+                                .onFailure(err -> {
+                                    logger.error("Failed to create provision entry: {}", err.getMessage());
+                                    ApiResponse.error(ctx, "Failed to start provisioning", Constants.HTTP_INTERNAL_SERVER_ERROR);
+                                });
+                    })
+                    .onFailure(err -> {
+                        logger.error("Provision verification failed: {}", err.getMessage());
+
+                        ApiResponse.error(ctx, err.getMessage(), Constants.HTTP_BAD_REQUEST);
+                    });
+        }
+        catch (Exception exception)
+        {
+            logger.error("Provision verification failed: {}", exception.getMessage());
+
+            ApiResponse.error(ctx, exception.getMessage(), Constants.HTTP_BAD_REQUEST);
         }
 
-        // Verify discovery ID exists and is valid, then create provision
-        verifyDiscoveryAndProvision(discoveryId)
-                .onSuccess(provisionData ->
-                {
-                    // Insert provision record
-                    dbHelper.insert(Constants.PROVISION_TABLE, provisionData)
-                            .onSuccess(res -> ApiResponse.success(ctx, provisionData, "Device provisioning started", 201))
-                            .onFailure(err -> {
-                                logger.error("Failed to create provision entry: {}", err.getMessage());
-                                ApiResponse.error(ctx, "Failed to start provisioning", Constants.HTTP_INTERNAL_SERVER_ERROR);
-                            });
-                })
-                .onFailure(err -> {
-                    logger.error("Provision verification failed: {}", err.getMessage());
-
-                    ApiResponse.error(ctx, err.getMessage(), Constants.HTTP_BAD_REQUEST);
-                });
     }
 
     /**
@@ -151,19 +161,29 @@ public class ProvisionRoutes extends BaseApi
      */
     private Future<Boolean> checkExistingProvision(String ip)
     {
-        var query = String.format("SELECT COUNT(*) as count FROM %s WHERE %s = $1",
-                Constants.PROVISION_TABLE, Constants.IP);
+        try
+        {
+            var query = String.format("SELECT COUNT(*) as count FROM %s WHERE %s = $1",
+                    Constants.PROVISION_TABLE, Constants.IP);
 
-        return client.preparedQuery(query)
-                .execute(Tuple.of(ip))
-                .map(rows ->
-                {
+            return client.preparedQuery(query)
+                    .execute(Tuple.of(ip))
+                    .map(rows ->
+                    {
 
-                    var row = rows.iterator().next();
+                        var row = rows.iterator().next();
 
-                    var count = row.getInteger("count");
+                        var count = row.getInteger("count");
 
-                    return count > 0;
-                });
+                        return count > 0;
+                    });
+        }
+        catch (Exception exception)
+        {
+            logger.error("failed to check existing provision: {}", exception.getMessage());
+
+            return Future.failedFuture(exception);
+        }
+
     }
 }

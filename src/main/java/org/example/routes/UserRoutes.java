@@ -9,6 +9,8 @@ import org.example.constants.Constants;
 import org.example.db.DbQueryHelper;
 import org.example.utils.ApiResponse;
 import org.example.utils.Jwt;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -17,6 +19,8 @@ import java.util.Base64;
 
 public class UserRoutes extends BaseApi
 {
+    private static final Logger logger = LoggerFactory.getLogger(UserRoutes.class);
+
     protected final DbQueryHelper dbHelper;
 
     private final Jwt jwt;
@@ -56,131 +60,159 @@ public class UserRoutes extends BaseApi
 
     private void register (RoutingContext ctx)
     {
-        var body = ctx.body().asJsonObject();
-
-        if(!validate(ctx))
+        try
         {
-            return;
+            var body = ctx.body().asJsonObject();
+
+            if(!validate(ctx))
+            {
+                return;
+            }
+
+            var username = body.getString("username");
+
+            var password = body.getString("password");
+
+            var data = new JsonObject()
+                    .put("username", username)
+                    .put("password", hashPassword(password));
+
+
+            dbHelper.insert(Constants.USER_TABLE, data)
+                    .onSuccess(v -> ApiResponse.success(ctx, null, "User registered successfully", Constants.HTTP_OK))
+                    .onFailure(err ->
+                    {
+                        ApiResponse.error(ctx, err.getMessage(), Constants.HTTP_BAD_REQUEST);
+                    });
+        }
+        catch (Exception exception)
+        {
+            logger.error("Failed to register user: {}", exception.getMessage());
+
+            ApiResponse.error(ctx, exception.getMessage(), Constants.HTTP_BAD_REQUEST);
+
         }
 
-        var username = body.getString("username");
-
-        var password = body.getString("password");
-
-        var data = new JsonObject()
-                .put("username", username)
-                .put("password", hashPassword(password));
-
-
-        dbHelper.insert(Constants.USER_TABLE, data)
-                .onSuccess(v -> ApiResponse.success(ctx, null, "User registered successfully", Constants.HTTP_OK))
-                .onFailure(err ->
-                {
-                    ApiResponse.error(ctx, err.getMessage(), Constants.HTTP_BAD_REQUEST);
-                });
     }
 
 
     protected void login(RoutingContext ctx)
     {
-        var body = ctx.body().asJsonObject();
+       try
+       {
+           var body = ctx.body().asJsonObject();
 
-        if(!validate(ctx))
-        {
-            return;
-        }
+           if(!validate(ctx))
+           {
+               return;
+           }
 
-        var username = body.getString("username");
+           var username = body.getString("username");
 
-        var password = body.getString("password");
+           var password = body.getString("password");
 
-        dbHelper.fetchOne(Constants.USER_TABLE, "username", username)
-                .compose(user ->
-                {
-                    if (user == null)
-                    {
-                        return Future.failedFuture("User not found");
-                    }
+           dbHelper.fetchOne(Constants.USER_TABLE, "username", username)
+                   .compose(user ->
+                   {
+                       if (user == null)
+                       {
+                           return Future.failedFuture("User not found");
+                       }
 
-                    var storedPassword = user.getString("password");
+                       var storedPassword = user.getString("password");
 
-                    var hashedInputPassword = hashPassword(password);
+                       var hashedInputPassword = hashPassword(password);
 
-                    if (storedPassword.equals(hashedInputPassword))
-                    {
-                        user.remove("password");
+                       if (storedPassword.equals(hashedInputPassword))
+                       {
+                           user.remove("password");
 
-                        var token = jwt.generateToken(username);
-                        var refreshToken = jwt.generateRefreshToken(username);
+                           var token = jwt.generateToken(username);
+                           var refreshToken = jwt.generateRefreshToken(username);
 
-                        user.put("token", token);
+                           user.put("token", token);
 
-                        user.put("refreshToken", refreshToken);
+                           user.put("refreshToken", refreshToken);
 
-                        return Future.succeededFuture(user);
-                    }
-                    else
-                    {
-                        return Future.failedFuture("Invalid password");
-                    }
-                })
+                           return Future.succeededFuture(user);
+                       }
+                       else
+                       {
+                           return Future.failedFuture("Invalid password");
+                       }
+                   })
 
-                .onSuccess(user -> ApiResponse.success(ctx, user, "Login successful", Constants.HTTP_OK))
+                   .onSuccess(user -> ApiResponse.success(ctx, user, "Login successful", Constants.HTTP_OK))
 
-                .onFailure(err ->
-                {
-                    ApiResponse.error(ctx, err.getMessage(), Constants.HTTP_UNAUTHORIZED);
-                });
+                   .onFailure(err ->
+                   {
+                       ApiResponse.error(ctx, err.getMessage(), Constants.HTTP_UNAUTHORIZED);
+                   });
+       }
+       catch (Exception exception)
+       {
+           logger.error("Failed to login user: {}", exception.getMessage());
+           ApiResponse.error(ctx, "Failed to login user", Constants.HTTP_BAD_REQUEST);
+       }
     }
 
     private void refresh(RoutingContext ctx)
     {
-        var token = ctx.request().getHeader("Authorization");
+       try
+       {
+           var token = ctx.request().getHeader("Authorization");
 
-        if (token == null || !token.startsWith("Bearer "))
-        {
-            ApiResponse.error(ctx, "Missing or invalid token", Constants.HTTP_UNAUTHORIZED);
-            return;
-        }
+           if (token == null || !token.startsWith("Bearer "))
+           {
+               ApiResponse.error(ctx, "Missing or invalid token", Constants.HTTP_UNAUTHORIZED);
+               return;
+           }
 
-        var refreshToken = token.substring(7);
+           var refreshToken = token.substring(7);
 
-        // Verify the refresh token
-        jwt.getAuthProvider().authenticate(new JsonObject().put("token", refreshToken))
-                .compose(user -> {
-                    // Check if this is a refresh token
-                    var tokenInfo = user.principal();
+           // Verify the refresh token
+           jwt.getAuthProvider().authenticate(new JsonObject().put("token", refreshToken))
+                   .compose(user -> {
+                       // Check if this is a refresh token
+                       var tokenInfo = user.principal();
 
-                    if (!"refresh".equals(tokenInfo.getString("type")))
-                    {
-                        return Future.failedFuture("Invalid token type");
-                    }
+                       if (!"refresh".equals(tokenInfo.getString("type")))
+                       {
+                           return Future.failedFuture("Invalid token type");
+                       }
 
-                    // Extract username from token
-                    var username = tokenInfo.getString("sub");
+                       // Extract username from token
+                       var username = tokenInfo.getString("sub");
 
-                    if (username == null)
-                    {
-                        return Future.failedFuture("Invalid token");
-                    }
+                       if (username == null)
+                       {
+                           return Future.failedFuture("Invalid token");
+                       }
 
-                    // Generate new tokens
-                    var newAccessToken = jwt.generateToken(username);
+                       // Generate new tokens
+                       var newAccessToken = jwt.generateToken(username);
 
-                    var newRefreshToken = jwt.generateRefreshToken(username);
+                       var newRefreshToken = jwt.generateRefreshToken(username);
 
-                    // Return the new tokens
-                    JsonObject response = new JsonObject()
-                            .put("token", newAccessToken)
-                            .put("refreshToken", newRefreshToken)
-                            .put("username", username);
+                       // Return the new tokens
+                       JsonObject response = new JsonObject()
+                               .put("token", newAccessToken)
+                               .put("refreshToken", newRefreshToken)
+                               .put("username", username);
 
-                    return Future.succeededFuture(response);
-                })
+                       return Future.succeededFuture(response);
+                   })
 
-                .onSuccess(tokens -> ApiResponse.success(ctx, tokens, "Token refreshed successfully", Constants.HTTP_OK))
+                   .onSuccess(tokens -> ApiResponse.success(ctx, tokens, "Token refreshed successfully", Constants.HTTP_OK))
 
-                .onFailure(err -> ApiResponse.error(ctx, err.getMessage(), Constants.HTTP_UNAUTHORIZED));
+                   .onFailure(err -> ApiResponse.error(ctx, err.getMessage(), Constants.HTTP_UNAUTHORIZED));
+       }
+       catch (Exception exception)
+       {
+              logger.error("Failed to refresh token: {}", exception.getMessage());
+
+              ApiResponse.error(ctx, "Failed to refresh token", Constants.HTTP_BAD_REQUEST);
+       }
     }
 
     public Router init(Router router)

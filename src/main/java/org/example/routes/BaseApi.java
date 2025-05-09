@@ -127,7 +127,7 @@ public abstract class BaseApi
         {
             return Integer.parseInt(idParam);
         }
-        catch (NumberFormatException exception)
+        catch (Exception exception)
         {
             logger.error("Invalid ID format: {}", idParam);
 
@@ -144,19 +144,30 @@ public abstract class BaseApi
      */
     protected void create(RoutingContext ctx)
     {
-        var body = ctx.body().asJsonObject();
-
-        if (!validate(ctx))
+        try
         {
-            return;
+
+            var body = ctx.body().asJsonObject();
+
+            if (!validate(ctx))
+            {
+                return;
+            }
+
+            dbHelper.insert(tableName, body)
+                    .onSuccess(res -> ApiResponse.success(ctx, null, moduleName + " created successfully", 201))
+                    .onFailure(err -> {
+                        logger.error("Failed to create {}: {}", moduleName, err.getMessage());
+
+                        ApiResponse.error(ctx, "Failed to create " + moduleName, Constants.HTTP_INTERNAL_SERVER_ERROR);
+                    });
+        }
+        catch (Exception exception)
+        {
+            logger.error("Failed to create {}: {}", moduleName, exception.getMessage());
+            ApiResponse.error(ctx, "Failed to create " + moduleName, Constants.HTTP_INTERNAL_SERVER_ERROR);
         }
 
-        dbHelper.insert(tableName, body)
-                .onSuccess(res -> ApiResponse.success(ctx, null, moduleName + " created successfully", 201))
-                .onFailure(err -> {
-                    logger.error("Failed to create {}: {}", moduleName, err.getMessage());
-                    ApiResponse.error(ctx, "Failed to create " + moduleName, Constants.HTTP_INTERNAL_SERVER_ERROR);
-                });
     }
 
     /**
@@ -166,26 +177,35 @@ public abstract class BaseApi
      */
     protected void update(RoutingContext ctx)
     {
-        var id = parseId(ctx);
-
-        if (id == null)
+        try
         {
-            return;
+            var id = parseId(ctx);
+
+            if (id == null)
+            {
+                return;
+            }
+
+            var body = ctx.body().asJsonObject();
+
+            if (validate(ctx))
+            {
+                return;
+            }
+
+            dbHelper.update(tableName, FIELD_ID, id, body)
+                    .onSuccess(res -> ApiResponse.success(ctx, null, moduleName + " updated successfully", Constants.HTTP_OK))
+                    .onFailure(err -> {
+                        logger.error("Failed to update {} with id {}: {}", moduleName, id, err.getMessage());
+                        ApiResponse.error(ctx, "Failed to update " + moduleName, Constants.HTTP_INTERNAL_SERVER_ERROR);
+                    });
+        }
+        catch (Exception exception)
+        {
+            logger.error("Failed to update {}: {}", moduleName,exception.getMessage());
+            ApiResponse.error(ctx, "Failed to update " + moduleName, Constants.HTTP_INTERNAL_SERVER_ERROR);
         }
 
-        var body = ctx.body().asJsonObject();
-
-        if (validate(ctx))
-        {
-            return;
-        }
-
-        dbHelper.update(tableName, FIELD_ID, id, body)
-                .onSuccess(res -> ApiResponse.success(ctx, null, moduleName + " updated successfully", Constants.HTTP_OK))
-                .onFailure(err -> {
-                    logger.error("Failed to update {} with id {}: {}", moduleName, id, err.getMessage());
-                    ApiResponse.error(ctx, "Failed to update " + moduleName, Constants.HTTP_INTERNAL_SERVER_ERROR);
-                });
     }
 
     /**
@@ -195,18 +215,28 @@ public abstract class BaseApi
      */
     protected void delete(RoutingContext ctx)
     {
-        var id = parseId(ctx);
-        if (id == null)
+        try
         {
-            return;
+            var id = parseId(ctx);
+            if (id == null)
+            {
+                return;
+            }
+
+            dbHelper.delete(tableName, FIELD_ID, id)
+                    .onSuccess(res -> ApiResponse.success(ctx, null, moduleName + " deleted successfully", Constants.HTTP_OK))
+                    .onFailure(err -> {
+                        logger.error("Failed to delete {} with id {}: {}", moduleName, id, err.getMessage());
+                        ApiResponse.error(ctx, "Failed to delete " + moduleName, Constants.HTTP_INTERNAL_SERVER_ERROR);
+                    });
+        }
+        catch (Exception exception)
+        {
+            logger.error("Failed to delete {} : {}", moduleName, exception.getMessage());
+
+            ApiResponse.error(ctx, "Failed to delete " + moduleName, Constants.HTTP_INTERNAL_SERVER_ERROR);
         }
 
-        dbHelper.delete(tableName, FIELD_ID, id)
-                .onSuccess(res -> ApiResponse.success(ctx, null, moduleName + " deleted successfully", Constants.HTTP_OK))
-                .onFailure(err -> {
-                    logger.error("Failed to delete {} with id {}: {}", moduleName, id, err.getMessage());
-                    ApiResponse.error(ctx, "Failed to delete " + moduleName, Constants.HTTP_INTERNAL_SERVER_ERROR);
-                });
     }
 
     /**
@@ -215,25 +245,35 @@ public abstract class BaseApi
      */
     protected void findOne(RoutingContext ctx)
     {
-        var id = parseId(ctx);
-
-        if (id == null)
+        try
         {
-            return;
+            var id = parseId(ctx);
+
+            if (id == null)
+            {
+                return;
+            }
+
+            dbHelper.fetchOne(tableName, FIELD_ID, id)
+                    .onSuccess(row -> {
+                        if (row != null) {
+                            ApiResponse.success(ctx, row, moduleName + " found", Constants.HTTP_OK);
+                        } else {
+                            ApiResponse.error(ctx, moduleName + " not found", Constants.HTTP_NOT_FOUND);
+                        }
+                    })
+                    .onFailure(err -> {
+                        logger.error("Failed to fetch {} with id {}: {}", moduleName, id, err.getMessage());
+                        ApiResponse.error(ctx, "Failed to fetch " + moduleName, Constants.HTTP_INTERNAL_SERVER_ERROR);
+                    });
+        }
+        catch (Exception exception)
+        {
+            logger.error("Failed to fetch {}: {}", moduleName, exception.getMessage());
+
+            ApiResponse.error(ctx, "Failed to fetch " + moduleName, Constants.HTTP_INTERNAL_SERVER_ERROR);
         }
 
-        dbHelper.fetchOne(tableName, FIELD_ID, id)
-                .onSuccess(row -> {
-                    if (row != null) {
-                        ApiResponse.success(ctx, row, moduleName + " found", Constants.HTTP_OK);
-                    } else {
-                        ApiResponse.error(ctx, moduleName + " not found", Constants.HTTP_NOT_FOUND);
-                    }
-                })
-                .onFailure(err -> {
-                    logger.error("Failed to fetch {} with id {}: {}", moduleName, id, err.getMessage());
-                    ApiResponse.error(ctx, "Failed to fetch " + moduleName, Constants.HTTP_INTERNAL_SERVER_ERROR);
-                });
     }
 
     /**
@@ -243,13 +283,23 @@ public abstract class BaseApi
      */
     protected void findAll(RoutingContext ctx)
     {
-        logger.info("Fetching all {} records", moduleName);
+        try
+        {
+            logger.info("Fetching all {} records", moduleName);
 
-        dbHelper.fetchAll(tableName)
-                .onSuccess(rows -> ApiResponse.success(ctx, rows, moduleName + " list fetched", Constants.HTTP_OK))
-                .onFailure(err -> {
-                    logger.error("Failed to fetch all {}: {}", moduleName, err.getMessage());
-                    ApiResponse.error(ctx, "Failed to fetch all " + moduleName, Constants.HTTP_INTERNAL_SERVER_ERROR);
-                });
+            dbHelper.fetchAll(tableName)
+                    .onSuccess(rows -> ApiResponse.success(ctx, rows, moduleName + " list fetched", Constants.HTTP_OK))
+                    .onFailure(err -> {
+                        logger.error("Failed to fetch all {}: {}", moduleName, err.getMessage());
+                        ApiResponse.error(ctx, "Failed to fetch all " + moduleName, Constants.HTTP_INTERNAL_SERVER_ERROR);
+                    });
+        }
+        catch (Exception exception)
+        {
+            logger.error("Failed to fetch all {}: {}", moduleName, exception.getMessage());
+
+            ApiResponse.error(ctx, "Failed to fetch all " + moduleName, Constants.HTTP_INTERNAL_SERVER_ERROR);
+        }
+
     }
 }

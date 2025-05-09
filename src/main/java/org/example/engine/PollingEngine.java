@@ -75,7 +75,8 @@ public class PollingEngine extends AbstractVerticle
                         // Filter devices that are due for polling
                         var devicesToProcess = filterDevicesForPolling(devices);
 
-                        if (devicesToProcess.isEmpty()) {
+                        if (devicesToProcess.isEmpty())
+                        {
                             LOGGER.debug("No devices due for polling in this cycle");
                             return;
                         }
@@ -90,7 +91,8 @@ public class PollingEngine extends AbstractVerticle
                                     for (var device : devicesToProcess) {
                                         var provisionId = device.getInteger(Constants.FIELD_ID);
 
-                                        if (provisionId != null) {
+                                        if (provisionId != null)
+                                        {
                                             lastPollTimeMap.put(provisionId, currentTime);
                                         }
 
@@ -180,7 +182,7 @@ public class PollingEngine extends AbstractVerticle
             return collectFuture.compose(contextsArray -> {
                 if (contextsArray.isEmpty())
                 {
-                    LOGGER.debug("No valid device contexts to process");
+                    LOGGER.warn("No valid device contexts to process");
                     return Future.succeededFuture();
                 }
 
@@ -312,7 +314,6 @@ public class PollingEngine extends AbstractVerticle
             return Future.succeededFuture(null);
         }
 
-        LOGGER.debug("Checking availability for device IP: {}, Port: {}", ip, port);
 
         var profile = new JsonObject()
                 .put(Constants.IP, ip)
@@ -327,7 +328,6 @@ public class PollingEngine extends AbstractVerticle
                         return Future.succeededFuture(null);
                     }
 
-                    LOGGER.debug("Device available, preparing context for IP: {}", ip);
 
                     return credentialProfiles.fetchCredentialProfiles(credentialIds)
                             .compose(profiles -> {

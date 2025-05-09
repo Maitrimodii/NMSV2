@@ -160,6 +160,7 @@ public class ProcessBuilderUtil
      */
     public static Future<JsonArray> spawnPluginEngine(Vertx vertx, JsonArray pluginInput)
     {
+
         if (pluginInput == null || pluginInput.isEmpty())
         {
             LOGGER.error("Plugin input is null or empty");

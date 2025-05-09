@@ -26,6 +26,7 @@ public class Main {
 
                 .onFailure(err -> {
                     logger.error("Failed to start server: {}", err.getMessage());
+
                     vertx.close();
                 });
     }
@@ -42,6 +43,7 @@ public class Main {
                 .compose(config -> DBConfig.createPgPool(vertx, config)
 
                         .compose(pgPool -> {
+
                             var dbHelper = new DbQueryHelper(pgPool);
 
                             // Deploy the HttpServer verticle
@@ -54,6 +56,7 @@ public class Main {
                                         // Deploy DiscoveryEngine verticle
                                         return vertx.deployVerticle(new DiscoveryEngine(dbHelper))
                                                 .compose(discoveryEngineId -> {
+
                                                     logger.info("DiscoveryEngine verticle deployed successfully with ID: {}", discoveryEngineId);
 
                                                     // Deploy PollingEngine verticle
