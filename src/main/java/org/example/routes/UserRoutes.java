@@ -51,7 +51,7 @@ public class UserRoutes extends BaseApi
         }
         catch (NoSuchAlgorithmException exception)
         {
-            System.err.println(Constants.ALGORITHM + " not available: " + exception.getMessage());
+            logger.error(Constants.ALGORITHM + " not available: {}", exception.getMessage());
 
             return null;
         }

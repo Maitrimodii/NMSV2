@@ -25,7 +25,7 @@ public class PollingEngine extends AbstractVerticle
 
     private static final long POLLING_INTERVAL_MS = 10000;
 
-    private final Map<Integer, Long> lastPollTimeMap = new HashMap<>();
+    private final Map<Integer, Long> lastPollTime = new HashMap<>();
 
     private final DbQueryHelper dbHelper;
 
@@ -67,8 +67,11 @@ public class PollingEngine extends AbstractVerticle
         try {
             dbHelper.fetchAll(Constants.PROVISION_TABLE)
                     .onSuccess(devices -> {
-                        if (devices == null || devices.isEmpty()) {
+
+                        if (devices == null || devices.isEmpty())
+                        {
                             LOGGER.debug("No provisioned devices found");
+
                             return;
                         }
 
@@ -93,7 +96,7 @@ public class PollingEngine extends AbstractVerticle
 
                                         if (provisionId != null)
                                         {
-                                            lastPollTimeMap.put(provisionId, currentTime);
+                                            lastPollTime.put(provisionId, currentTime);
                                         }
 
                                     }
@@ -133,10 +136,10 @@ public class PollingEngine extends AbstractVerticle
 
 
                         // Get last poll time, default to 0 if never polled
-                        var lastPollTime = lastPollTimeMap.getOrDefault(provisionId, 0L);
+                        var lastPoll = lastPollTime.getOrDefault(provisionId, 0L);
 
                         // Check if enough time has passed since last poll
-                        return (currentTime - lastPollTime >= POLLING_INTERVAL_MS);
+                        return (currentTime - lastPoll >= POLLING_INTERVAL_MS);
                     })
                     .toList();
         }
@@ -231,16 +234,19 @@ public class PollingEngine extends AbstractVerticle
             LOGGER.info("Processing plugin results for {} entries", resultArray.size());
 
             // Process each result and store its metrics
-            for (var i = 0; i < resultArray.size(); i++) {
+            for (var i = 0; i < resultArray.size(); i++)
+            {
                 var result = resultArray.getJsonObject(i);
 
-                if (result == null) {
+                if (result == null)
+                {
                     continue;
                 }
 
                 var status = result.getString(Constants.STATUS, "");
 
-                if (!Constants.SUCCESS.equalsIgnoreCase(status)) {
+                if (!Constants.SUCCESS.equalsIgnoreCase(status))
+                {
                     LOGGER.warn("Result has non-success status: {}", status);
 
                     continue;
@@ -248,7 +254,8 @@ public class PollingEngine extends AbstractVerticle
 
                 var provisionId = result.getInteger(Constants.PROVISION_ID);
 
-                if (provisionId == null) {
+                if (provisionId == null)
+                {
                     LOGGER.warn("Result missing provision ID, skipping metrics storage");
 
                     continue;

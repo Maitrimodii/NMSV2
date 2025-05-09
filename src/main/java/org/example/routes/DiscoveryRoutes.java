@@ -71,7 +71,6 @@ public class DiscoveryRoutes extends BaseApi
                         {
                             var credentialIdsArray = new JsonArray(credentialIdsStr);
 
-
                             payload.put(Constants.CREDENTIAL_IDS, credentialIdsArray);
                         }
                         catch (Exception exception)

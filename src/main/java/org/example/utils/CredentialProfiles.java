@@ -31,18 +31,19 @@ public class CredentialProfiles {
     {
         var profiles = new JsonArray();
 
-        var future = Future.succeededFuture(profiles);
 
         for (var i = 0; i < credentialIds.size(); i++)
         {
             var idObj = credentialIds.getValue(i);
 
-            if (!(idObj instanceof Integer credentialId)) {
+            if (!(idObj instanceof Integer credentialId))
+            {
                 LOGGER.warn("Invalid credential ID format at index {}: {}", i, idObj);
+
                 continue;
             }
 
-            future = future.compose(res ->
+            return Future.succeededFuture(profiles).compose(res ->
                     dbHelper.fetchOne(Constants.CREDENTIAL_TABLE, Constants.FIELD_ID, credentialId)
                             .map(credential -> {
                                 if (credential != null)
@@ -59,7 +60,7 @@ public class CredentialProfiles {
                             })
             );
         }
-        return future;
+        return Future.succeededFuture(profiles);
     }
 
     /**
@@ -67,10 +68,12 @@ public class CredentialProfiles {
      * @param credentialProfiles The array of credential profiles
      * @return Formatted JSON array of credentials
      */
-    public JsonArray formatCredentials(JsonArray credentialProfiles) {
+    public JsonArray formatCredentials(JsonArray credentialProfiles)
+    {
         var formattedCredentials = new JsonArray();
 
-        for (var i = 0; i < credentialProfiles.size(); i++) {
+        for (var i = 0; i < credentialProfiles.size(); i++)
+        {
             var credential = credentialProfiles.getJsonObject(i);
 
             if (credential != null)

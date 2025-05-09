@@ -39,7 +39,8 @@ public class DbQueryHelper
 
     public Future<RowSet<Row>> insert(String table, JsonObject data)
     {
-        try {
+        try
+        {
             var fieldNames = data.stream()
                     .map(Map.Entry::getKey)
                     .toList();
@@ -55,12 +56,16 @@ public class DbQueryHelper
 
             var values = Tuple.tuple();
 
-            for (var field : fieldNames) {
+            for (var field : fieldNames)
+            {
                 var value = data.getValue(field);
 
-                if (value instanceof JsonArray || value instanceof JsonObject) {
+                if (value instanceof JsonArray || value instanceof JsonObject)
+                {
                     values.addValue(value.toString());
-                } else {
+                }
+                else
+                {
                     values.addValue(value);
                 }
             }

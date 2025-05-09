@@ -100,7 +100,8 @@ public class HttpServer extends AbstractVerticle
         catch (Exception exception)
         {
             logger.error("Failed to setup router: {}", exception.getMessage());
+
+            return null;
         }
-        return null;
     }
 }

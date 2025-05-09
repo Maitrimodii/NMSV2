@@ -188,7 +188,7 @@ public abstract class BaseApi
 
             var body = ctx.body().asJsonObject();
 
-            if (validate(ctx))
+            if (!validate(ctx))
             {
                 return;
             }
@@ -197,12 +197,14 @@ public abstract class BaseApi
                     .onSuccess(res -> ApiResponse.success(ctx, null, moduleName + " updated successfully", Constants.HTTP_OK))
                     .onFailure(err -> {
                         logger.error("Failed to update {} with id {}: {}", moduleName, id, err.getMessage());
+
                         ApiResponse.error(ctx, "Failed to update " + moduleName, Constants.HTTP_INTERNAL_SERVER_ERROR);
                     });
         }
         catch (Exception exception)
         {
             logger.error("Failed to update {}: {}", moduleName,exception.getMessage());
+
             ApiResponse.error(ctx, "Failed to update " + moduleName, Constants.HTTP_INTERNAL_SERVER_ERROR);
         }
 
@@ -218,6 +220,7 @@ public abstract class BaseApi
         try
         {
             var id = parseId(ctx);
+
             if (id == null)
             {
                 return;

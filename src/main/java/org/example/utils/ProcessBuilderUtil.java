@@ -22,7 +22,7 @@ public class ProcessBuilderUtil
 
     private static final int SOCKET_TIMEOUT_MS = 2000;   // 2 seconds
 
-    private static final int PROCESS_TIMEOUT_SEC = 30;   // 30 seconds
+    private static final int PROCESS_TIMEOUT_SEC = 10;   // 30 seconds
 
     private static final String GO_BINARY_PATH = "go/nms-plugin";
 
@@ -66,8 +66,6 @@ public class ProcessBuilderUtil
 
                     return false;
                 }
-
-                LOGGER.info("Device is available at IP: {}, Port: {}", ip, port);
 
                 return true;
 
@@ -165,11 +163,13 @@ public class ProcessBuilderUtil
         {
             LOGGER.error("Plugin input is null or empty");
 
-            return Future.succeededFuture(null);
+            return Future.failedFuture("Plugin input is null or empty");
         }
 
         return vertx.executeBlocking(() -> {
             Process process = null;
+
+            var allResults = new JsonArray();
 
             try
             {
@@ -177,18 +177,14 @@ public class ProcessBuilderUtil
                 {
                     LOGGER.error("Go binary not found at: {}", GO_BINARY_PATH);
 
-                    return null;
+                    return allResults;
                 }
 
                 var pb = new ProcessBuilder(GO_BINARY_PATH);
 
-                pb.redirectErrorStream(false);
-
                 process = pb.start();
 
                 var inputString = pluginInput.encode();
-
-                LOGGER.info("Sending input to Go plugin: {}", inputString);
 
                 try (var writer = new BufferedWriter(new OutputStreamWriter(process.getOutputStream(), StandardCharsets.UTF_8)))
                 {
@@ -200,7 +196,6 @@ public class ProcessBuilderUtil
                     writer.flush();
                 }
 
-                var allResults = new JsonArray();
 
                 try (var reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)))
                 {
@@ -216,7 +211,6 @@ public class ProcessBuilderUtil
 
                                 allResults.add(resultObj);
 
-                                LOGGER.info("Received result from Go plugin: {}", resultObj.encode());
                             }
                             catch (Exception exception)
                             {
@@ -234,7 +228,7 @@ public class ProcessBuilderUtil
 
                     process.destroyForcibly();
 
-                    return allResults.isEmpty() ? null : allResults;
+                    return allResults;
                 }
 
                 var exitCode = process.exitValue();
@@ -243,7 +237,7 @@ public class ProcessBuilderUtil
                 {
                     LOGGER.error("Go plugin process failed with exit code: {}", exitCode);
 
-                    return allResults.isEmpty() ? null : allResults;
+                    return allResults;
                 }
 
                 LOGGER.info("Go plugin completed successfully with {} results", allResults.size());
@@ -255,7 +249,7 @@ public class ProcessBuilderUtil
 
                 LOGGER.error("I/O error spawning Go plugin: {}", exception.getMessage(), exception);
 
-                return null;
+                return allResults;
             }
             catch (InterruptedException exception)
             {
@@ -263,11 +257,11 @@ public class ProcessBuilderUtil
 
                 Thread.currentThread().interrupt();
 
-                return null;
+                return allResults;
             }
             finally
             {
-                if (process != null && process.isAlive())
+                if (process != null)
                 {
                     process.destroyForcibly();
                 }

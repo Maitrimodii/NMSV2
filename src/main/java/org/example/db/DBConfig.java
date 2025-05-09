@@ -118,7 +118,7 @@ public class DBConfig {
         }
         catch (Exception exception)
         {
-            logger.error("Failed executing queries" + exception.getMessage());
+            logger.error("Failed executing queries{}", exception.getMessage());
 
             return Future.failedFuture("failed executing queries" + exception.getMessage());
         }

@@ -107,7 +107,6 @@ public class DiscoveryEngine extends AbstractVerticle
                         // Format data according to Go plugin expectations
                         var goPluginInput = createGoPluginInput(ip, port, profiles);
 
-                        // Check device availability asynchronously
                         var checkObject = new JsonObject()
                                 .put(Constants.IP, ip)
                                 .put(Constants.PORT, port);
@@ -132,6 +131,7 @@ public class DiscoveryEngine extends AbstractVerticle
                                                 if (resultArray == null || resultArray.isEmpty())
                                                 {
                                                     result.put(Constants.STATUS, Constants.FAIL);
+
                                                     return Future.succeededFuture(result);
                                                 }
 
@@ -160,22 +160,28 @@ public class DiscoveryEngine extends AbstractVerticle
                                     // Update database with discovery status
                                     return dbHelper.update(Constants.DISCOVERY_TABLE, Constants.FIELD_ID, id, updateFields)
                                             .map(updateResult -> {
+
                                                 LOGGER.info("Discovery status updated successfully for id={}", discoveryId);
+
                                                 return res;
                                             })
                                             .otherwise(err -> {
+
                                                 LOGGER.error("Failed to update discovery status for id={}: {}", discoveryId, err.getMessage());
+
                                                 return res;
                                             });
                                 });
                     });
-        } catch (Exception exception)
+        }
+        catch (Exception exception)
         {
             LOGGER.error("Unexpected error during discovery process for id={}: {}", discoveryId, exception.getMessage(), exception);
 
             result.put(Constants.STATUS, Constants.FAIL);
 
-            return Future.succeededFuture(result);        }
+            return Future.succeededFuture(result);
+        }
     }
 
     /**
